@@ -1,0 +1,8 @@
+.DS_Store
+ftpserver
+.idea
+.vscode
+debug
+__debug_bin*
+*.toml
+coverage.txt

@@ -1,0 +1,19 @@
+# NetBerth Configuration
+server:
+  host: 0.0.0.0
+  port: 8443
+  read_timeout: 30s
+  write_timeout: 30s
+
+database:
+  path: ./data/netberth.db
+
+auth:
+  jwt_secret: "" # Set via NB_JWT_SECRET env var
+  access_token_expiry: 15m
+  refresh_token_expiry: 168h
+  session_max_age: 24h
+
+log:
+  level: info
+  format: json

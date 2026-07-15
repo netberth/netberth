@@ -1,0 +1,13 @@
+services:
+  netberth:
+    build: .
+    container_name: netberth
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - NB_SERVER_PORT=8443
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data:/app/data
+      - ./certs:/app/certs
+      - /volume1:/storage:ro

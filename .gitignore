@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.local
+.DS_Store
+internal/licensing/enterprise/
+.jwt_secret
+data/
+/internal/licensing/factory_ent.go

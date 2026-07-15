@@ -1,0 +1,10 @@
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata sqlite-libs curl openssl
+WORKDIR /app
+COPY netberth-linux /app/netberth
+COPY scripts/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh && mkdir -p /app/data /app/config /app/certs /storage
+EXPOSE 8443
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -sf http://localhost:8443/api/v1/system/status || exit 1
+ENTRYPOINT ["/app/entrypoint.sh"]
