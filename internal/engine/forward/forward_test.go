@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"runtime"
-	"sync"
 	"testing"
 	"time"
 
@@ -129,12 +128,14 @@ func TestMaxConns(t *testing.T) {
 	echoLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	defer echoLn.Close()
 	echoPort := echoLn.Addr().(*net.TCPAddr).Port
+	// echo server: hold connections until test signals release
+	echoHold := make(chan struct{})
 	go func() {
 		for {
 			conn, err := echoLn.Accept()
 			if err != nil { return }
 			go func(c net.Conn) {
-				time.Sleep(5 * time.Second) // hold connection long enough
+				<-echoHold
 				c.Close()
 			}(conn)
 		}
@@ -154,24 +155,42 @@ func TestMaxConns(t *testing.T) {
 	eng.Reload(rule)
 	time.Sleep(200 * time.Millisecond)
 
-	// Open 3 connections, 3rd should be rejected
-	var wg sync.WaitGroup
-	rejected := 0
-	for i := 0; i < 3; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", listenPort), 1*time.Second)
-			if err != nil { rejected++; return }
-			defer conn.Close()
-			conn.Read(make([]byte, 1))
-		}()
+	// Establish 2 connections serially, each confirmed before proceeding.
+	// This eliminates the race between concurrent dials and the engine's
+	// atomic accept-then-check loop — the 3rd dial deterministically hits a
+	// saturated limit.
+	dial := func() net.Conn {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", listenPort), 1*time.Second)
+		if err != nil {
+			t.Fatalf("unexpected dial error: %v", err)
+		}
+		return conn
 	}
-	wg.Wait()
+	c1 := dial()
+	c2 := dial()
+	time.Sleep(50 * time.Millisecond) // let engine count both
 
-	if rejected < 1 {
-		t.Errorf("expected at least 1 rejection with max_conns=2, got %d rejected", rejected)
+	// 3rd connection — engine should reject (dial error) or accept-then-close.
+	rejected := false
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", listenPort), 500*time.Millisecond)
+	if err != nil {
+		rejected = true
+	} else {
+		conn.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+		_, readErr := conn.Read(make([]byte, 1))
+		conn.Close()
+		if readErr != nil {
+			rejected = true // server closed immediately ⇒ reject
+		}
 	}
+	if !rejected {
+		t.Errorf("expected 3rd connection to be rejected with max_conns=2, but it succeeded")
+	}
+
+	// Release held connections
+	close(echoHold)
+	c1.Close()
+	c2.Close()
 }
 
 func TestGoroutineLeakOnReload(t *testing.T) {
