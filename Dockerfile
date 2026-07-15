@@ -9,7 +9,7 @@ FROM golang:1.22-alpine AS go-builder
 ENV GOPROXY=https://goproxy.cn,direct
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 WORKDIR /src
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN mkdir -p internal/api/handler/webroot
