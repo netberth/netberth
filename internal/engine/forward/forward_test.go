@@ -124,7 +124,6 @@ func TestTCPForwardAccept(t *testing.T) {
 }
 
 func TestMaxConns(t *testing.T) {
-	if testing.Short() { t.Skip("skipping timing-sensitive concurrency test in short mode") }
 	echoLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	defer echoLn.Close()
 	echoPort := echoLn.Addr().(*net.TCPAddr).Port
