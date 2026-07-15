@@ -5,17 +5,13 @@ RUN npm install
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.22-alpine AS go-builder
-ENV GOPROXY=https://goproxy.cn,direct
+FROM golang:1.24-alpine AS go-builder
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
 COPY . .
 RUN mkdir -p internal/api/handler/webroot
 COPY --from=web-builder /dist/web/ internal/api/handler/webroot/
-RUN go mod tidy
-RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o netberth ./cmd/netberth
+RUN CGO_ENABLED=1 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o netberth ./cmd/netberth
 
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata sqlite-libs curl openssl
