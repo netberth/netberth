@@ -1,6 +1,8 @@
 # NetBerth
 
-Enterprise-grade network service management platform. Port forwarding, reverse proxy, DDNS, STUN NAT traversal, Wake-on-LAN, cron scheduling, ACME certificate management, and network storage — all in one binary.
+[![CI](https://github.com/netberth/netberth/actions/workflows/ci.yml/badge.svg)](https://github.com/netberth/netberth/actions/workflows/ci.yml)
+
+Self-hosted NAT traversal & networking toolbox for NAS and homelab. Port forwarding, reverse proxy, DDNS, STUN NAT traversal, Wake-on-LAN, cron scheduling, ACME certificate management, and network storage — all in one binary.
 
 Deployable via Docker in 30 seconds.
 
@@ -27,7 +29,7 @@ make build && make run
 |--------|-------------|
 | **Port Forwarding** | TCP/UDP, IPv4/IPv6 dual-stack, whitelist/blacklist, scheduled switching |
 | **Reverse Proxy** | HTTP/HTTPS, WebSocket, URL rewrite, basic auth, IP/UA ACL |
-| **Dynamic DNS** | Cloudflare, Alibaba Cloud, DNSPod/Tencent. Auto IP detection via interface or URL |
+| **Dynamic DNS** | Cloudflare, Aliyun, DNSPod, GoDaddy, DuckDNS, No-IP, Dynv6, Namecheap, ClouDNS. Auto IP detection via interface or URL |
 | **STUN Tunneling** | NAT traversal for services behind NAT without public IP |
 | **Wake-on-LAN** | Magic packet sender, IoT platform integration ready |
 | **Cron Scheduler** | Visual cron editor, shell commands, module toggle actions |
@@ -105,4 +107,6 @@ Environment variables override `config/netberth.yaml`:
 
 ## License
 
-MIT — see LICENSE file.
+NetBerth is licensed under AGPL-3.0 (see [LICENSE](LICENSE)).
+A commercial license for enterprise features is available —
+contact us via [GitHub Issues](https://github.com/netberth/netberth/issues).
