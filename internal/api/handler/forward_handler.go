@@ -55,10 +55,13 @@ func (h *ForwardHandler) List(w http.ResponseWriter, r *http.Request) {
 	rules := make([]model.ForwardRule, 0)
 	for rows.Next() {
 		var r model.ForwardRule
-		rows.Scan(&r.ID, &r.TenantID, &r.OwnerID, &r.Name, &r.Protocol,
+		if err := rows.Scan(&r.ID, &r.TenantID, &r.OwnerID, &r.Name, &r.Protocol,
 			&r.ListenAddr, &r.ListenPort, &r.TargetAddr, &r.TargetPort,
 			&r.EnableIPv6, &r.MaxConns, &r.Enabled,
-			&r.ScheduleOn, &r.ScheduleOff, &r.CreatedAt, &r.UpdatedAt)
+			&r.ScheduleOn, &r.ScheduleOff, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "scan failed")
+			return
+		}
 
 		r.Whitelist = loadACLEntries(h.db, "forward_whitelist", r.ID)
 		r.Blacklist = loadACLEntries(h.db, "forward_blacklist", r.ID)
@@ -160,7 +163,9 @@ func loadACLEntries(db *sql.DB, table, ruleID string) []model.ACLEntry {
 	var entries []model.ACLEntry
 	for rows.Next() {
 		var e model.ACLEntry
-		rows.Scan(&e.ID, &e.Value)
+		if err := rows.Scan(&e.ID, &e.Value); err != nil {
+			return nil
+		}
 		entries = append(entries, e)
 	}
 	if entries == nil {

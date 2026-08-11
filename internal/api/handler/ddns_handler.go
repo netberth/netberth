@@ -51,9 +51,12 @@ func (h *DDNSHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var c model.DDNSConfig
 		var creds string
-		rows.Scan(&c.ID, &c.Name, &c.Provider, &c.Domain, &c.SubDomain, &c.RecordType,
+		if err := rows.Scan(&c.ID, &c.Name, &c.Provider, &c.Domain, &c.SubDomain, &c.RecordType,
 			&c.TTL, &creds, &c.GetIPURL, &c.GetIPType, &c.NetInterface, &c.Interval,
-			&c.Enabled, &c.CreatedAt, &c.UpdatedAt)
+			&c.Enabled, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "scan failed")
+			return
+		}
 		json.Unmarshal([]byte(creds), &c.Credentials)
 		configs = append(configs, c)
 	}

@@ -23,7 +23,7 @@ func TestFTPAnonymousAuth(t *testing.T) {
 
 	eng := New(&mockMountDB{})
 	m := model.StorageMount{
-		ID:       "ftp-anon", Name: "anon", Type: "local", Source: dir,
+		ID: "ftp-anon", Name: "anon", Type: "local", Source: dir,
 		Services: []string{"ftp"}, FTPPort: 30000, Enabled: true,
 	}
 	eng.startMount(m)
@@ -63,11 +63,10 @@ func TestFTPAuthenticatedAuth(t *testing.T) {
 
 	// Wrong credentials → rejected
 	ftpSend(t, conn, "USER baduser")
-	time.Sleep(100 * time.Millisecond)
+	ftpExpect(t, conn, "331")
 	ftpSend(t, conn, "PASS badpass")
-	time.Sleep(100 * time.Millisecond)
 	resp := ftpRead(t, conn)
-	if !strings.Contains(resp, "530") {
+	if !strings.HasPrefix(resp, "530") {
 		t.Errorf("expected 530 for invalid creds, got: %s", resp)
 	}
 
@@ -76,9 +75,8 @@ func TestFTPAuthenticatedAuth(t *testing.T) {
 	defer conn2.Close()
 	ftpExpect(t, conn2, "220")
 	ftpSend(t, conn2, "USER admin")
-	time.Sleep(100 * time.Millisecond)
+	ftpExpect(t, conn2, "331")
 	ftpSend(t, conn2, "PASS ftp-pass-123")
-	time.Sleep(100 * time.Millisecond)
 	ftpExpect(t, conn2, "230")
 
 	eng.Stop()
@@ -92,7 +90,7 @@ func TestFTPTenantIsolation(t *testing.T) {
 	m := model.StorageMount{
 		ID: "ftp-tenant", Name: "tenant", Type: "local", Source: dir,
 		TenantID: "tenant-A", // Creates dir/tenant-A as root
-		Services: []string{"ftp"}, FTPPort: 30200, Enabled: true,
+		Services: []string{"ftp"}, FTPPort: freePortRange(t, 3), Enabled: true,
 	}
 	eng.startMount(m)
 	time.Sleep(300 * time.Millisecond)
@@ -106,20 +104,18 @@ func TestFTPTenantIsolation(t *testing.T) {
 	// Create a file inside tenant root
 	os.WriteFile(filepath.Join(tenantDir, "data.log"), []byte("tenant data"), 0644)
 
-	conn := ftpConnect(t, 30202)
+	conn := ftpConnect(t, m.FTPPort+2)
 	defer conn.Close()
 	ftpExpect(t, conn, "220")
 	ftpLogin(t, conn)
 
-	// LIST requires passive data connection. Connect to the PASV port.
+	// LIST requires passive data connection. Wait for the PASV port and the
+	// asynchronously-opened data listener instead of sleeping.
 	ftpSend(t, conn, "PASV")
-	time.Sleep(100 * time.Millisecond)
-	pasvResp := ftpRead(t, conn)
-	dataPort := parsePASVPort(pasvResp)
-	if dataPort == 0 { t.Skip("PASV port not parseable: " + pasvResp) }
+	dataPort := waitForPASVPort(t, conn)
+	dataConn := waitForDataConn(t, dataPort)
 	ftpSend(t, conn, "LIST")
-	time.Sleep(100 * time.Millisecond)
-	dataConn := ftpDataConnect(t, dataPort)
+	ftpExpect(t, conn, "150")
 	buf := make([]byte, 4096)
 	n, _ := dataConn.Read(buf)
 	dataConn.Close()
@@ -174,49 +170,74 @@ func TestFTPPathTraversalBlocked(t *testing.T) {
 }
 
 func TestFTPSharedSecurityWithWebDAV(t *testing.T) {
-	t.Skip("TODO: flaky — FTP PASV data port timing, tracked")
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "shared.txt"), []byte("shared content"), 0644)
 
+	port := freePortRange(t, 3)
 	eng := New(&mockMountDB{})
 	m := model.StorageMount{
 		ID: "ftp-shared", Name: "shared", Type: "local", Source: dir,
-		Services: []string{"ftp", "webdav"}, FTPPort: 30400, Enabled: true,
+		Services: []string{"ftp", "webdav"}, FTPPort: port, Enabled: true,
 	}
 	eng.startMount(m)
-	time.Sleep(400 * time.Millisecond)
 
-	// FTP access
-	conn := ftpConnect(t, 30402)
+	// Wait for FTP control port instead of sleeping.
+	ftpAddr := fmt.Sprintf("127.0.0.1:%d", port+2)
+	waitFor(t, 5*time.Second, func() bool {
+		c, err := net.DialTimeout("tcp", ftpAddr, 200*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		c.Close()
+		return true
+	})
+
+	// FTP access.
+	conn := ftpConnect(t, port+2)
 	defer conn.Close()
 	ftpExpect(t, conn, "220")
 	ftpLogin(t, conn)
 	ftpSend(t, conn, "PASV")
-	time.Sleep(100 * time.Millisecond)
 	pasvResp := ftpRead(t, conn)
 	dataPort := parsePASVPort(pasvResp)
-	if dataPort > 0 {
-		ftpSend(t, conn, "LIST")
-		time.Sleep(100 * time.Millisecond)
-		dataConn := ftpDataConnect(t, dataPort)
-		buf := make([]byte, 4096)
-		n, _ := dataConn.Read(buf)
-		dataConn.Close()
-		listResp := string(buf[:n])
-		ftpExpect(t, conn, "226")
-		t.Logf("FTP LIST: %q", listResp)
-		if !strings.Contains(listResp, "shared.txt") {
-			t.Errorf("FTP should list shared.txt: %s", listResp)
-		}
+	if dataPort == 0 {
+		t.Fatalf("PASV port not parseable: %s", pasvResp)
 	}
 
-	// WebDAV access — same file visible
-	resp, err := httpGet("http://127.0.0.1:30401/shared.txt")
+	// Connect the data channel before LIST so the server has an established
+	// connection when it processes the transfer command.
+	dataConn := waitForDataConn(t, dataPort)
+	ftpSend(t, conn, "LIST")
+	ftpExpect(t, conn, "150")
+	dataConn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	listData, err := io.ReadAll(dataConn)
+	dataConn.Close()
 	if err != nil {
-		t.Fatalf("WebDAV request failed: %v", err)
+		t.Fatalf("read FTP LIST data: %v", err)
 	}
-	if !strings.Contains(resp, "shared content") {
-		t.Errorf("WebDAV should read shared.txt: %s", resp)
+	listResp := string(listData)
+	ftpExpect(t, conn, "226")
+	t.Logf("FTP LIST: %q", listResp)
+	if !strings.Contains(listResp, "shared.txt") {
+		t.Errorf("FTP should list shared.txt: %s", listResp)
+	}
+
+	// WebDAV access — same file must be visible.
+	var webdavBody string
+	webdavURL := fmt.Sprintf("http://127.0.0.1:%d/shared.txt", port+1)
+	waitFor(t, 5*time.Second, func() bool {
+		resp, err := httpGet(webdavURL)
+		if err != nil {
+			return false
+		}
+		if strings.Contains(resp, "shared content") {
+			webdavBody = resp
+			return true
+		}
+		return false
+	})
+	if !strings.Contains(webdavBody, "shared content") {
+		t.Errorf("WebDAV should read shared.txt: %s", webdavBody)
 	}
 
 	eng.Stop()
@@ -252,7 +273,9 @@ func TestFTPGracefulShutdown(t *testing.T) {
 func ftpConnect(t *testing.T, port int) net.Conn {
 	t.Helper()
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 3*time.Second)
-	if err != nil { t.Fatalf("FTP connect to :%d: %v", port, err) }
+	if err != nil {
+		t.Fatalf("FTP connect to :%d: %v", port, err)
+	}
 	return conn
 }
 
@@ -261,21 +284,32 @@ func ftpSend(t *testing.T, conn net.Conn, cmd string) {
 	fmt.Fprintf(conn, "%s\r\n", cmd)
 }
 
+// ftpRead reads exactly one CRLF-terminated control line. FTP responses are a
+// stream; raw Read calls can return multiple lines (e.g. 150+226) in one chunk,
+// so tests must consume one logical response at a time.
 func ftpRead(t *testing.T, conn net.Conn) string {
 	t.Helper()
-	buf := make([]byte, 4096)
 	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
-	n, err := conn.Read(buf)
-	if err != nil && err != io.EOF {
-		t.Logf("FTP read warning: %v", err)
+	var sb strings.Builder
+	one := make([]byte, 1)
+	for {
+		n, err := conn.Read(one)
+		if n > 0 {
+			sb.WriteByte(one[0])
+			if one[0] == '\n' {
+				return strings.TrimRight(sb.String(), "\r\n")
+			}
+		}
+		if err != nil {
+			t.Fatalf("FTP read line failed: %v (partial %q)", err, sb.String())
+		}
 	}
-	return string(buf[:n])
 }
 
 func ftpExpect(t *testing.T, conn net.Conn, code string) {
 	t.Helper()
 	resp := ftpRead(t, conn)
-	if !strings.Contains(resp, code) {
+	if !strings.HasPrefix(resp, code) {
 		t.Errorf("expected code %s in %q", code, resp)
 	}
 }
@@ -293,9 +327,13 @@ func ftpLogin(t *testing.T, conn net.Conn) {
 func parsePASVPort(resp string) int {
 	i := strings.LastIndex(resp, "(")
 	j := strings.LastIndex(resp, ")")
-	if i < 0 || j <= i { return 0 }
+	if i < 0 || j <= i {
+		return 0
+	}
 	parts := strings.Split(resp[i+1:j], ",")
-	if len(parts) < 6 { return 0 }
+	if len(parts) < 6 {
+		return 0
+	}
 	var p1, p2 int
 	fmt.Sscanf(parts[4]+" "+parts[5], "%d %d", &p1, &p2)
 	return p1*256 + p2
@@ -304,7 +342,9 @@ func parsePASVPort(resp string) int {
 func ftpDataConnect(t *testing.T, port int) net.Conn {
 	t.Helper()
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 3*time.Second)
-	if err != nil { t.Fatalf("data connect to :%d: %v", port, err) }
+	if err != nil {
+		t.Fatalf("data connect to :%d: %v", port, err)
+	}
 	return conn
 }
 
@@ -331,42 +371,80 @@ func TestFTPChrootSecurity(t *testing.T) {
 
 	// LIST: should show inside.txt, NOT outside.txt
 	ftpSend(t, conn, "PASV")
-	time.Sleep(100 * time.Millisecond)
-	pasvResp := ftpRead(t, conn)
-	dp := parsePASVPort(pasvResp)
-	if dp == 0 { t.Skip("PASV parse failed") }
+	dp := waitForPASVPort(t, conn)
+	dc := waitForDataConn(t, dp)
 	ftpSend(t, conn, "LIST")
-	time.Sleep(100 * time.Millisecond)
-	dc := ftpDataConnect(t, dp)
+	ftpExpect(t, conn, "150")
 	buf := make([]byte, 4096)
 	n, _ := dc.Read(buf)
 	dc.Close()
 	lr := string(buf[:n])
-	ftpRead(t, conn) // consume 226 after data xfer
+	ftpExpect(t, conn, "226")
 
-	if !strings.Contains(lr, "inside.txt") { t.Errorf("should list inside.txt: %s", lr) }
-	if strings.Contains(lr, "outside.txt") { t.Errorf("SECURITY BREACH: outside.txt visible in chroot: %s", lr) }
+	if !strings.Contains(lr, "inside.txt") {
+		t.Errorf("should list inside.txt: %s", lr)
+	}
+	if strings.Contains(lr, "outside.txt") {
+		t.Errorf("SECURITY BREACH: outside.txt visible in chroot: %s", lr)
+	}
 	t.Logf("chroot LIST: %q", lr)
 
 	// CWD .. then LIST — still chrooted
 	ftpSend(t, conn, "CWD ..")
-	time.Sleep(100 * time.Millisecond)
+	ftpExpect(t, conn, "250")
 	ftpSend(t, conn, "PASV")
-	time.Sleep(100 * time.Millisecond)
-	pasv2 := ftpRead(t, conn)
-	dp2 := parsePASVPort(pasv2)
-	if dp2 > 0 {
-		ftpSend(t, conn, "LIST")
-		time.Sleep(100 * time.Millisecond)
-		dc2 := ftpDataConnect(t, dp2)
-		buf2 := make([]byte, 4096)
-		n2, _ := dc2.Read(buf2)
-		dc2.Close()
-		lr2 := string(buf2[:n2])
-		ftpRead(t, conn) // consume 226
-		if strings.Contains(lr2, "outside.txt") { t.Errorf("SECURITY: CWD .. breached chroot: %s", lr2) }
-		t.Logf("after CWD .. LIST: %q", lr2)
+	dp2 := waitForPASVPort(t, conn)
+	dc2 := waitForDataConn(t, dp2)
+	ftpSend(t, conn, "LIST")
+	ftpExpect(t, conn, "150")
+	buf2 := make([]byte, 4096)
+	n2, _ := dc2.Read(buf2)
+	dc2.Close()
+	lr2 := string(buf2[:n2])
+	ftpExpect(t, conn, "226")
+	if strings.Contains(lr2, "outside.txt") {
+		t.Errorf("SECURITY: CWD .. breached chroot: %s", lr2)
 	}
+	t.Logf("after CWD .. LIST: %q", lr2)
 
 	eng.Stop()
+}
+
+// waitFor polls fn until it returns true or the deadline passes.
+func waitFor(t *testing.T, timeout time.Duration, fn func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if fn() {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for condition")
+}
+
+// waitForPASVPort reads the PASV response line and fails loudly if unparseable.
+func waitForPASVPort(t *testing.T, conn net.Conn) int {
+	t.Helper()
+	line := ftpRead(t, conn)
+	port := parsePASVPort(line)
+	if port == 0 {
+		t.Fatalf("PASV port not parseable: %s", line)
+	}
+	return port
+}
+
+// waitForDataConn dials until the asynchronously-opened data listener accepts.
+func waitForDataConn(t *testing.T, port int) net.Conn {
+	t.Helper()
+	var conn net.Conn
+	waitFor(t, 5*time.Second, func() bool {
+		c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 300*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		conn = c
+		return true
+	})
+	return conn
 }

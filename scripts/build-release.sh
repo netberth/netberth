@@ -25,7 +25,7 @@ docker run --rm \
   -v "$(pwd)":/src \
   -w /src \
   -e GOPROXY=https://goproxy.cn,direct \
-  golang:1.22-alpine \
+  golang:1.25-alpine \
   sh -c 'apk add --no-cache gcc musl-dev sqlite-dev && CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -mod=vendor -ldflags="-s -w" -o netberth-linux ./cmd/netberth'
 
 ls -lh netberth-linux

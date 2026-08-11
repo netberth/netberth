@@ -23,6 +23,25 @@ import (
 	"github.com/netberth/netberth/internal/model"
 )
 
+// rewriteURL returns raw unchanged unless baseURL is set (tests), in which
+// case the scheme and host are replaced while preserving path and query.
+func (e *Engine) rewriteURL(raw string) string {
+	if e.baseURL == "" {
+		return raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	base, err := url.Parse(e.baseURL)
+	if err != nil {
+		return raw
+	}
+	base.Path = u.Path
+	base.RawQuery = u.RawQuery
+	return base.String()
+}
+
 // Aliyun DNS (Alibaba Cloud) — https://help.aliyun.com/document_detail/29776.html
 
 func (e *Engine) updateAliyun(cfg model.DDNSConfig, ip string) error {
@@ -56,7 +75,7 @@ func (e *Engine) aliyunGetRecord(cfg model.DDNSConfig, keyID, keySecret string) 
 	params["Signature"] = sig
 
 	query := aliyunBuildQuery(params)
-	resp, err := http.Get("https://alidns.aliyuncs.com/?" + query)
+	resp, err := http.Get(e.rewriteURL("https://alidns.aliyuncs.com/?" + query))
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +123,7 @@ func (e *Engine) aliyunCreateRecord(cfg model.DDNSConfig, keyID, keySecret strin
 	params["Signature"] = sig
 
 	query := aliyunBuildQuery(params)
-	resp, err := http.Get("https://alidns.aliyuncs.com/?" + query)
+	resp, err := http.Get(e.rewriteURL("https://alidns.aliyuncs.com/?" + query))
 	if err != nil {
 		return "", err
 	}
@@ -144,7 +163,7 @@ func (e *Engine) aliyunUpdateRecord(cfg model.DDNSConfig, ip, recordID, keyID, k
 	params["Signature"] = sig
 
 	query := aliyunBuildQuery(params)
-	resp, err := http.Get("https://alidns.aliyuncs.com/?" + query)
+	resp, err := http.Get(e.rewriteURL("https://alidns.aliyuncs.com/?" + query))
 	if err != nil {
 		return err
 	}
@@ -218,7 +237,7 @@ func (e *Engine) dnspodGetRecord(domain, subDomain, recordType, secretID, secret
 		"Subdomain":  subDomain,
 		"RecordType": recordType,
 	}
-	resp, err := dnspodCall("DescribeRecordList", payload, secretID, secretKey)
+	resp, err := e.dnspodCall("DescribeRecordList", payload, secretID, secretKey)
 	if err != nil {
 		return 0, err
 	}
@@ -248,7 +267,7 @@ func (e *Engine) dnspodCreateRecord(domain, subDomain, recordType, value string,
 		"Value":      value,
 		"TTL":        ttl,
 	}
-	resp, err := dnspodCall("CreateRecord", payload, secretID, secretKey)
+	resp, err := e.dnspodCall("CreateRecord", payload, secretID, secretKey)
 	if err != nil {
 		return err
 	}
@@ -277,7 +296,7 @@ func (e *Engine) dnspodUpdateRecord(domain, subDomain, recordType, value string,
 		"RecordId":   recordID,
 		"TTL":        ttl,
 	}
-	resp, err := dnspodCall("ModifyRecord", payload, secretID, secretKey)
+	resp, err := e.dnspodCall("ModifyRecord", payload, secretID, secretKey)
 	if err != nil {
 		return err
 	}
@@ -295,7 +314,7 @@ func (e *Engine) dnspodUpdateRecord(domain, subDomain, recordType, value string,
 	return nil
 }
 
-func dnspodCall(action string, payload map[string]interface{}, secretID, secretKey string) ([]byte, error) {
+func (e *Engine) dnspodCall(action string, payload map[string]interface{}, secretID, secretKey string) ([]byte, error) {
 	service := "dnspod"
 	host := "dnspod.tencentcloudapi.com"
 	version := "2021-03-23"
@@ -332,7 +351,7 @@ func dnspodCall(action string, payload map[string]interface{}, secretID, secretK
 	authorization := fmt.Sprintf("%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
 		algorithm, secretID, credentialScope, signedHeaders, signature)
 
-	req, _ := http.NewRequest("POST", "https://"+host+"/", strings.NewReader(string(body)))
+	req, _ := http.NewRequest("POST", e.rewriteURL("https://"+host+"/"), strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Host", host)
 	req.Header.Set("X-TC-Action", action)
@@ -366,7 +385,7 @@ func hmacSHA256(key, data []byte) []byte {
 // ===== Additional DDNS Providers =====
 
 // GoDaddy: https://developer.godaddy.com/doc/endpoint/domains
-func godaddyUpdate(cfg model.DDNSConfig, ip string) error {
+func (e *Engine) godaddyUpdate(cfg model.DDNSConfig, ip string) error {
 	key := cfg.Credentials["api_key"]
 	secret := cfg.Credentials["api_secret"]
 	if key == "" || secret == "" {
@@ -379,7 +398,7 @@ func godaddyUpdate(cfg model.DDNSConfig, ip string) error {
 	} else {
 		name = name + "." + cfg.Domain
 	}
-	url := fmt.Sprintf("https://api.godaddy.com/v1/domains/%s/records/%s/%s", cfg.Domain, recordType, cfg.SubDomain)
+	url := e.rewriteURL(fmt.Sprintf("https://api.godaddy.com/v1/domains/%s/records/%s/%s", cfg.Domain, recordType, cfg.SubDomain))
 	body := fmt.Sprintf(`[{"data":"%s","ttl":%d}]`, ip, cfg.TTL)
 	req, _ := http.NewRequest("PUT", url, strings.NewReader(body))
 	req.Header.Set("Authorization", "sso-key "+key+":"+secret)
@@ -396,7 +415,7 @@ func godaddyUpdate(cfg model.DDNSConfig, ip string) error {
 }
 
 // DuckDNS: https://www.duckdns.org/spec.jsp
-func duckdnsUpdate(cfg model.DDNSConfig, ip string) error {
+func (e *Engine) duckdnsUpdate(cfg model.DDNSConfig, ip string) error {
 	token := cfg.Credentials["token"]
 	if token == "" {
 		return fmt.Errorf("duckdns: need token")
@@ -405,7 +424,7 @@ func duckdnsUpdate(cfg model.DDNSConfig, ip string) error {
 	if domains == "@" {
 		domains = cfg.Domain
 	}
-	url := fmt.Sprintf("https://www.duckdns.org/update?domains=%s&token=%s&ip=%s", domains, token, ip)
+	url := e.rewriteURL(fmt.Sprintf("https://www.duckdns.org/update?domains=%s&token=%s&ip=%s", domains, token, ip))
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -419,7 +438,7 @@ func duckdnsUpdate(cfg model.DDNSConfig, ip string) error {
 }
 
 // No-IP: https://www.noip.com/integrate/request
-func noipUpdate(cfg model.DDNSConfig, ip string) error {
+func (e *Engine) noipUpdate(cfg model.DDNSConfig, ip string) error {
 	user := cfg.Credentials["username"]
 	pass := cfg.Credentials["password"]
 	if user == "" || pass == "" {
@@ -431,7 +450,7 @@ func noipUpdate(cfg model.DDNSConfig, ip string) error {
 	} else {
 		hostname = hostname + "." + cfg.Domain
 	}
-	url := fmt.Sprintf("https://dynupdate.no-ip.com/nic/update?hostname=%s&myip=%s", hostname, ip)
+	url := e.rewriteURL(fmt.Sprintf("https://dynupdate.no-ip.com/nic/update?hostname=%s&myip=%s", hostname, ip))
 	req, _ := http.NewRequest("GET", url, nil)
 	req.SetBasicAuth(user, pass)
 	req.Header.Set("User-Agent", "NetBerth/0.1")
@@ -449,7 +468,7 @@ func noipUpdate(cfg model.DDNSConfig, ip string) error {
 }
 
 // Dynv6: https://dynv6.com/docs/apis
-func dynv6Update(cfg model.DDNSConfig, ip string) error {
+func (e *Engine) dynv6Update(cfg model.DDNSConfig, ip string) error {
 	token := cfg.Credentials["token"]
 	if token == "" {
 		return fmt.Errorf("dynv6: need token")
@@ -458,7 +477,7 @@ func dynv6Update(cfg model.DDNSConfig, ip string) error {
 	if cfg.SubDomain != "@" {
 		zone = cfg.SubDomain + "." + cfg.Domain
 	}
-	url := fmt.Sprintf("https://dynv6.com/api/update?zone=%s&token=%s&ipv4=%s", zone, token, ip)
+	url := e.rewriteURL(fmt.Sprintf("https://dynv6.com/api/update?zone=%s&token=%s&ipv4=%s", zone, token, ip))
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -473,7 +492,7 @@ func dynv6Update(cfg model.DDNSConfig, ip string) error {
 }
 
 // Namecheap: https://www.namecheap.com/support/knowledgebase/article.aspx/29/11/how-to-dynamically-update-the-hosts-ip-with-an-http-request
-func namecheapUpdate(cfg model.DDNSConfig, ip string) error {
+func (e *Engine) namecheapUpdate(cfg model.DDNSConfig, ip string) error {
 	pass := cfg.Credentials["password"]
 	if pass == "" {
 		return fmt.Errorf("namecheap: need password (Dynamic DNS Password from dashboard)")
@@ -482,7 +501,7 @@ func namecheapUpdate(cfg model.DDNSConfig, ip string) error {
 	if host == "@" {
 		host = ""
 	}
-	url := fmt.Sprintf("https://dynamicdns.park-your-domain.com/update?host=%s&domain=%s&password=%s&ip=%s", host, cfg.Domain, pass, ip)
+	url := e.rewriteURL(fmt.Sprintf("https://dynamicdns.park-your-domain.com/update?host=%s&domain=%s&password=%s&ip=%s", host, cfg.Domain, pass, ip))
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -492,18 +511,18 @@ func namecheapUpdate(cfg model.DDNSConfig, ip string) error {
 }
 
 // ClouDNS: https://www.cloudns.net/wiki/article/42/
-func cloudnsUpdate(cfg model.DDNSConfig, ip string) error {
+func (e *Engine) cloudnsUpdate(cfg model.DDNSConfig, ip string) error {
 	authID := cfg.Credentials["auth_id"]
 	authPass := cfg.Credentials["auth_password"]
 	subID := cfg.Credentials["sub_auth_id"]
 	if authID == "" {
 		return fmt.Errorf("cloudns: need auth_id or sub_auth_id")
 	}
-	url := fmt.Sprintf("https://ipv4.cloudns.net/api/dynamicURL/?q=")
+	url := e.rewriteURL(fmt.Sprintf("https://ipv4.cloudns.net/api/dynamicURL/?q="))
 	if subID != "" {
-		url = fmt.Sprintf("https://ipv4.cloudns.net/api/dynamicURL/?q=%s", subID)
+		url = e.rewriteURL(fmt.Sprintf("https://ipv4.cloudns.net/api/dynamicURL/?q=%s", subID))
 	} else {
-		url = fmt.Sprintf("https://ipv4.cloudns.net/api/dynamicURL/?q=%s&auth-id=%s&auth-password=%s", authID, authID, authPass)
+		url = e.rewriteURL(fmt.Sprintf("https://ipv4.cloudns.net/api/dynamicURL/?q=%s&auth-id=%s&auth-password=%s", authID, authID, authPass))
 	}
 	resp, err := http.Get(url)
 	if err != nil {

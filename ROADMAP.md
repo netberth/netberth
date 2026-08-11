@@ -17,22 +17,30 @@
 
 | Package | Coverage | Target |
 |---------|----------|--------|
-| handler | 13.6% | 60% |
-| service | 4.3% | 40% |
-| acme | 0.0% | 50% |
-| ddns | 0.0% | 50% |
-| wol | 0.0% | 50% |
-| cron | 0.0% | 50% |
-| middleware | 67.6% | 80% |
-| validator | 0.0% | 80% |
+| handler | 85.2% (2026-08-11) | 50%+ ✅ |
+| service | 81.2% (2026-08-11) | 50%+ ✅ |
+| acme | 51.1% (2026-08-11) | 50% ✅ |
+| ddns | 87.7% (2026-08-11) | 50% ✅ |
+| wol | 91.3% (2026-08-11) | 50% ✅ |
+| cron | 95.3% (2026-08-11) | 50% ✅ |
+| router | 100.0% (2026-08-11) | — ✅ |
+| websocket | 69.0% (2026-08-11) | 50%+ ✅ |
+| middleware | 90.7% (2026-08-11) | 80% ✅ |
+| validator | 94.9% (2026-08-11) | 80% ✅ |
+| retry | 95.1% (2026-08-11) | 50%+ ✅ |
+| db | 85.4% (2026-08-11) | 50%+ ✅ |
+| utils | 100.0% (2026-08-11) | 80% ✅ |
 
 ## Engineering Debt
 
-- [ ] FTP PASV data port timing: `TestFTPSharedSecurityWithWebDAV` flaky (t.Skip)
-- [ ] Port collision on `go test -count=3` with default parallelism (some packages use fixed ports)
-- [ ] `TestMaxConns` skipped in short mode (timing-sensitive)
+- [x] FTP PASV data port timing: `TestFTPSharedSecurityWithWebDAV` 已取消 skip，改为先连数据口再 LIST、控制通道按行读取、轮询等待端口（2026-08-11）
+- [x] Port collision on `go test -count=3` with default parallelism — not reproduced on 2026-08-11 (multiple count=3 runs green)
+- [x] `TestMaxConns` skipped in short mode — replaced with deterministic version (synced from public repo)
 - [ ] ACME: uses self-signed fallback, not full certmagic integration
 - [ ] DDNS: 9 providers vs Lucky's 20+
+- [x] Handler List 与 service 适配器忽略 `rows.Scan`/`Query` 错误已修复并加回归测试（2026-08-11）
+- [x] Proxy `domains` 列不一致（schema `domain` vs 代码 `value`）已修复（2026-08-11）
+- [x] `SafePath` 加固：真正校验 base 包含关系，拒绝绝对路径/`..`/反斜杠/空字节（2026-08-11）
 
 ## v1.1 Planned
 

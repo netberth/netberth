@@ -211,15 +211,24 @@ func (e *Engine) autoRenewLoop() {
 			return
 		case <-ticker.C:
 			certs, _ := e.db.GetCertificates()
-			for _, cert := range certs {
-				if cert.AutoRenew && cert.Status == "valid" && cert.ExpiresAt != nil {
-					if time.Until(*cert.ExpiresAt) < time.Duration(cert.RenewDays)*24*time.Hour {
-						go e.renew(cert)
-					}
-				}
+			for _, cert := range e.renewDue(certs) {
+				go e.renew(cert)
 			}
 		}
 	}
+}
+
+// renewDue returns certificates that are eligible for renewal now.
+func (e *Engine) renewDue(certs []model.ACMECertificate) []model.ACMECertificate {
+	var due []model.ACMECertificate
+	for _, cert := range certs {
+		if cert.AutoRenew && cert.Status == "valid" && cert.ExpiresAt != nil {
+			if time.Until(*cert.ExpiresAt) < time.Duration(cert.RenewDays)*24*time.Hour {
+				due = append(due, cert)
+			}
+		}
+	}
+	return due
 }
 
 func (e *Engine) loadOrCreateAccountKey() (crypto.Signer, error) {

@@ -39,24 +39,31 @@ func (h *ProxyHandler) List(w http.ResponseWriter, r *http.Request) {
 	var total int
 	h.db.QueryRow("SELECT COUNT(*) FROM proxy_rules").Scan(&total)
 
-	rows, _ := h.db.Query(
+	rows, err := h.db.Query(
 		`SELECT id, tenant_id, owner_id, name, target_url, tls_enabled, cert_id,
 		 force_https, http2, websocket, url_rewrite, basic_auth_user, basic_auth_hash,
 		 max_conns, enabled, created_at, updated_at
 		 FROM proxy_rules ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		pageSize, (page-1)*pageSize,
 	)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "query failed")
+		return
+	}
 	defer rows.Close()
 
 	rules := make([]model.ProxyRule, 0)
 	for rows.Next() {
 		var r model.ProxyRule
-		rows.Scan(&r.ID, &r.TenantID, &r.OwnerID, &r.Name, &r.TargetURL,
+		if err := rows.Scan(&r.ID, &r.TenantID, &r.OwnerID, &r.Name, &r.TargetURL,
 			&r.TLSEnabled, &r.CertID, &r.ForceHTTPS, &r.HTTP2, &r.Websocket,
 			&r.URLRewrite, &r.BasicAuthUser, &r.BasicAuthHash, &r.MaxConns,
-			&r.Enabled, &r.CreatedAt, &r.UpdatedAt)
+			&r.Enabled, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "scan failed")
+			return
+		}
 
-		r.Domains = loadStringList(h.db, "proxy_domains", r.ID)
+		r.Domains = loadProxyDomains(h.db, r.ID)
 		r.IPWhitelist = loadACLEntries(h.db, "proxy_ip_whitelist", r.ID)
 		r.IPBlacklist = loadACLEntries(h.db, "proxy_ip_blacklist", r.ID)
 		r.UAWhitelist = loadStringList(h.db, "proxy_ua_whitelist", r.ID)
@@ -115,7 +122,7 @@ func (h *ProxyHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	saveStringList(h.db, "proxy_domains", rule.ID, rule.Domains)
+	saveProxyDomains(h.db, rule.ID, rule.Domains)
 	saveACLEntries(h.db, "proxy_ip_whitelist", rule.ID, rule.IPWhitelist)
 	saveACLEntries(h.db, "proxy_ip_blacklist", rule.ID, rule.IPBlacklist)
 	saveStringList(h.db, "proxy_ua_whitelist", rule.ID, rule.UAWhitelist)
@@ -151,7 +158,7 @@ func (h *ProxyHandler) Update(w http.ResponseWriter, r *http.Request) {
 	for _, t := range []string{"proxy_domains", "proxy_ip_whitelist", "proxy_ip_blacklist", "proxy_ua_whitelist", "proxy_ua_blacklist"} {
 		h.db.Exec("DELETE FROM "+t+" WHERE rule_id = ?", id)
 	}
-	saveStringList(h.db, "proxy_domains", id, rule.Domains)
+	saveProxyDomains(h.db, id, rule.Domains)
 	saveACLEntries(h.db, "proxy_ip_whitelist", id, rule.IPWhitelist)
 	saveACLEntries(h.db, "proxy_ip_blacklist", id, rule.IPBlacklist)
 	saveStringList(h.db, "proxy_ua_whitelist", id, rule.UAWhitelist)
@@ -177,7 +184,9 @@ func loadStringList(db *sql.DB, table, ruleID string) []string {
 	var list []string
 	for rows.Next() {
 		var v string
-		rows.Scan(&v)
+		if err := rows.Scan(&v); err != nil {
+			return nil
+		}
 		list = append(list, v)
 	}
 	if list == nil {
@@ -189,5 +198,31 @@ func loadStringList(db *sql.DB, table, ruleID string) []string {
 func saveStringList(db *sql.DB, table, ruleID string, list []string) {
 	for _, v := range list {
 		db.Exec("INSERT INTO "+table+" (id, rule_id, value) VALUES (?,?,?)", generateUUID(), ruleID, v)
+	}
+}
+
+func loadProxyDomains(db *sql.DB, ruleID string) []string {
+	rows, err := db.Query("SELECT domain FROM proxy_domains WHERE rule_id = ?", ruleID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var list []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil
+		}
+		list = append(list, d)
+	}
+	if list == nil {
+		list = []string{}
+	}
+	return list
+}
+
+func saveProxyDomains(db *sql.DB, ruleID string, domains []string) {
+	for _, d := range domains {
+		db.Exec("INSERT INTO proxy_domains (id, rule_id, domain) VALUES (?,?,?)", generateUUID(), ruleID, d)
 	}
 }

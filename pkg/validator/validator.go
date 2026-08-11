@@ -7,6 +7,7 @@ package validator
 import (
 	"net"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -70,7 +71,9 @@ func URL(raw string) bool {
 	return true
 }
 
-// SafePath prevents path traversal attacks (../, null bytes, absolute paths outside root)
+// SafePath prevents path traversal attacks and verifies that target resolves
+// inside base. It rejects null bytes, backslashes, any ".." component, and
+// absolute targets, then confirms the cleaned join stays under base.
 func SafePath(base, target string) bool {
 	if target == "" {
 		return false
@@ -79,13 +82,21 @@ func SafePath(base, target string) bool {
 	if strings.ContainsRune(target, 0) {
 		return false
 	}
-	// Reject path traversal
-	if strings.Contains(target, "..") {
+	// Reject path traversal and Windows-style separators
+	if strings.Contains(target, "..") || strings.Contains(target, "\\") {
 		return false
 	}
-	// Clean and verify stays within base
-	cleaned := strings.TrimPrefix(target, "/")
-	if strings.Contains(cleaned, "\\") {
+	// Absolute targets are never inside base
+	if filepath.IsAbs(target) {
+		return false
+	}
+	baseClean := filepath.Clean(base)
+	joined := filepath.Join(baseClean, target)
+	rel, err := filepath.Rel(baseClean, joined)
+	if err != nil {
+		return false
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return false
 	}
 	return true
@@ -121,7 +132,7 @@ func Email(e string) bool {
 }
 
 // CronSchedule validates a basic cron expression (5 fields)
-var cronRegex = regexp.MustCompile(`^(\*|[\d\-,/]+)\s+(\*|[\d\-,/]+)\s+(\*|[\d\-,/]+)\s+(\*|[\d\-,/]+)\s+(\*|[\d\-,/]+)$`)
+var cronRegex = regexp.MustCompile(`^(\*|\*/\d+|[0-9,\-/]+)(\s+(\*|\*/\d+|[0-9,\-/]+)){4,5}$`)
 
 func CronSchedule(s string) bool {
 	return cronRegex.MatchString(strings.TrimSpace(s))

@@ -24,7 +24,8 @@ type Engine struct {
 		GetConfigs() ([]model.DDNSConfig, error)
 		UpdateIP(id, ip string) error
 	}
-	stopCh chan struct{}
+	stopCh  chan struct{}
+	baseURL string // test override; empty = production endpoints
 }
 
 func New(db interface {
@@ -172,17 +173,17 @@ func (e *Engine) updateDNS(cfg model.DDNSConfig, ip string) error {
 	case "dnspod", "tencent":
 		return e.updateDNSPod(cfg, ip)
 	case "godaddy":
-		return godaddyUpdate(cfg, ip)
+		return e.godaddyUpdate(cfg, ip)
 	case "duckdns":
-		return duckdnsUpdate(cfg, ip)
+		return e.duckdnsUpdate(cfg, ip)
 	case "noip":
-		return noipUpdate(cfg, ip)
+		return e.noipUpdate(cfg, ip)
 	case "dynv6":
-		return dynv6Update(cfg, ip)
+		return e.dynv6Update(cfg, ip)
 	case "namecheap":
-		return namecheapUpdate(cfg, ip)
+		return e.namecheapUpdate(cfg, ip)
 	case "cloudns":
-		return cloudnsUpdate(cfg, ip)
+		return e.cloudnsUpdate(cfg, ip)
 	default:
 		return fmt.Errorf("unsupported provider: %s", cfg.Provider)
 	}
@@ -199,7 +200,7 @@ func (e *Engine) updateCloudflare(cfg model.DDNSConfig, ip string) error {
 		return fmt.Errorf("get record: %w", err)
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
-	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records/%s", zoneID, recordID)
+	url := e.rewriteURL(fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records/%s", zoneID, recordID))
 	body := fmt.Sprintf(`{"type":"%s","name":"%s.%s","content":"%s","ttl":%d,"proxied":false}`,
 		cfg.RecordType, cfg.SubDomain, cfg.Domain, ip, cfg.TTL)
 	req, _ := http.NewRequest("PUT", url, io.NopCloser(
@@ -227,7 +228,7 @@ func (e *Engine) cloudflareGetRecordID(token, zoneID, subDomain, domain string) 
 	} else {
 		name = domain
 	}
-	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records?type=A&name=%s", zoneID, name)
+	url := e.rewriteURL(fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records?type=A&name=%s", zoneID, name))
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := client.Do(req)

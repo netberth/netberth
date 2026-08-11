@@ -198,7 +198,9 @@ func (d *forwardDB) GetRules() ([]model.ForwardRule, error) {
 	var rules []model.ForwardRule
 	for rows.Next() {
 		var r model.ForwardRule
-		rows.Scan(&r.ID, &r.TenantID, &r.OwnerID, &r.Name, &r.Protocol, &r.ListenAddr, &r.ListenPort, &r.TargetAddr, &r.TargetPort, &r.EnableIPv6, &r.MaxConns, &r.Enabled, &r.ScheduleOn, &r.ScheduleOff)
+		if err := rows.Scan(&r.ID, &r.TenantID, &r.OwnerID, &r.Name, &r.Protocol, &r.ListenAddr, &r.ListenPort, &r.TargetAddr, &r.TargetPort, &r.EnableIPv6, &r.MaxConns, &r.Enabled, &r.ScheduleOn, &r.ScheduleOff); err != nil {
+			return nil, err
+		}
 		r.Whitelist = loadWireACL(d.DB, "forward_whitelist", r.ID)
 		r.Blacklist = loadWireACL(d.DB, "forward_blacklist", r.ID)
 		rules = append(rules, r)
@@ -209,13 +211,18 @@ func (d *forwardDB) GetRules() ([]model.ForwardRule, error) {
 type proxyDB struct{ *sql.DB }
 
 func (d *proxyDB) GetRules() ([]model.ProxyRule, error) {
-	rows, _ := d.DB.Query("SELECT id, tenant_id, owner_id, name, target_url, tls_enabled, cert_id, force_https, http2, websocket, url_rewrite, basic_auth_user, basic_auth_hash, max_conns, enabled FROM proxy_rules")
+	rows, err := d.DB.Query("SELECT id, tenant_id, owner_id, name, target_url, tls_enabled, cert_id, force_https, http2, websocket, url_rewrite, basic_auth_user, basic_auth_hash, max_conns, enabled FROM proxy_rules")
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	var rules []model.ProxyRule
 	for rows.Next() {
 		var r model.ProxyRule
-		rows.Scan(&r.ID, &r.TenantID, &r.OwnerID, &r.Name, &r.TargetURL, &r.TLSEnabled, &r.CertID, &r.ForceHTTPS, &r.HTTP2, &r.Websocket, &r.URLRewrite, &r.BasicAuthUser, &r.BasicAuthHash, &r.MaxConns, &r.Enabled)
-		r.Domains = loadWireStrings(d.DB, "proxy_domains", r.ID)
+		if err := rows.Scan(&r.ID, &r.TenantID, &r.OwnerID, &r.Name, &r.TargetURL, &r.TLSEnabled, &r.CertID, &r.ForceHTTPS, &r.HTTP2, &r.Websocket, &r.URLRewrite, &r.BasicAuthUser, &r.BasicAuthHash, &r.MaxConns, &r.Enabled); err != nil {
+			return nil, err
+		}
+		r.Domains = loadWireDomains(d.DB, r.ID)
 		r.IPWhitelist = loadWireACL(d.DB, "proxy_ip_whitelist", r.ID)
 		r.IPBlacklist = loadWireACL(d.DB, "proxy_ip_blacklist", r.ID)
 		r.UAWhitelist = loadWireStrings(d.DB, "proxy_ua_whitelist", r.ID)
@@ -228,13 +235,18 @@ func (d *proxyDB) GetRules() ([]model.ProxyRule, error) {
 type ddnsDB struct{ *sql.DB }
 
 func (d *ddnsDB) GetConfigs() ([]model.DDNSConfig, error) {
-	rows, _ := d.DB.Query("SELECT id, name, provider, domain, sub_domain, record_type, ttl, credentials, get_ip_url, get_ip_type, net_interface, interval_seconds, enabled FROM ddns_configs")
+	rows, err := d.DB.Query("SELECT id, name, provider, domain, sub_domain, record_type, ttl, credentials, get_ip_url, get_ip_type, net_interface, interval_seconds, enabled FROM ddns_configs")
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	var cfgs []model.DDNSConfig
 	for rows.Next() {
 		var c model.DDNSConfig
 		var creds string
-		rows.Scan(&c.ID, &c.Name, &c.Provider, &c.Domain, &c.SubDomain, &c.RecordType, &c.TTL, &creds, &c.GetIPURL, &c.GetIPType, &c.NetInterface, &c.Interval, &c.Enabled)
+		if err := rows.Scan(&c.ID, &c.Name, &c.Provider, &c.Domain, &c.SubDomain, &c.RecordType, &c.TTL, &creds, &c.GetIPURL, &c.GetIPType, &c.NetInterface, &c.Interval, &c.Enabled); err != nil {
+			return nil, err
+		}
 		json.Unmarshal([]byte(creds), &c.Credentials)
 		cfgs = append(cfgs, c)
 	}
@@ -249,12 +261,17 @@ func (d *ddnsDB) UpdateIP(id, ip string) error {
 type stunDB struct{ *sql.DB }
 
 func (d *stunDB) GetTunnels() ([]model.STUNTunnel, error) {
-	rows, _ := d.DB.Query("SELECT id, name, protocol, local_port, remote_port, stun_server, target_addr, target_port, enabled FROM stun_tunnels")
+	rows, err := d.DB.Query("SELECT id, name, protocol, local_port, remote_port, stun_server, target_addr, target_port, enabled FROM stun_tunnels")
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	var tunnels []model.STUNTunnel
 	for rows.Next() {
 		var t model.STUNTunnel
-		rows.Scan(&t.ID, &t.Name, &t.Protocol, &t.LocalPort, &t.RemotePort, &t.STUNServer, &t.TargetAddr, &t.TargetPort, &t.Enabled)
+		if err := rows.Scan(&t.ID, &t.Name, &t.Protocol, &t.LocalPort, &t.RemotePort, &t.STUNServer, &t.TargetAddr, &t.TargetPort, &t.Enabled); err != nil {
+			return nil, err
+		}
 		tunnels = append(tunnels, t)
 	}
 	return tunnels, nil
@@ -263,12 +280,17 @@ func (d *stunDB) GetTunnels() ([]model.STUNTunnel, error) {
 type wolDB struct{ *sql.DB }
 
 func (d *wolDB) GetDevices() ([]model.WOLDevice, error) {
-	rows, _ := d.DB.Query("SELECT id, name, mac, broadcast, port FROM wol_devices")
+	rows, err := d.DB.Query("SELECT id, name, mac, broadcast, port FROM wol_devices")
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	var devices []model.WOLDevice
 	for rows.Next() {
 		var dev model.WOLDevice
-		rows.Scan(&dev.ID, &dev.Name, &dev.MAC, &dev.Broadcast, &dev.Port)
+		if err := rows.Scan(&dev.ID, &dev.Name, &dev.MAC, &dev.Broadcast, &dev.Port); err != nil {
+			return nil, err
+		}
 		devices = append(devices, dev)
 	}
 	return devices, nil
@@ -277,12 +299,17 @@ func (d *wolDB) GetDevices() ([]model.WOLDevice, error) {
 type cronDB struct{ *sql.DB }
 
 func (d *cronDB) GetJobs() ([]model.CronJob, error) {
-	rows, _ := d.DB.Query("SELECT id, name, schedule, type, command, module_id, module_type, enabled FROM cron_jobs")
+	rows, err := d.DB.Query("SELECT id, name, schedule, type, command, module_id, module_type, enabled FROM cron_jobs")
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	var jobs []model.CronJob
 	for rows.Next() {
 		var j model.CronJob
-		rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Type, &j.Command, &j.ModuleID, &j.ModuleType, &j.Enabled)
+		if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Type, &j.Command, &j.ModuleID, &j.ModuleType, &j.Enabled); err != nil {
+			return nil, err
+		}
 		jobs = append(jobs, j)
 	}
 	return jobs, nil
@@ -291,13 +318,18 @@ func (d *cronDB) GetJobs() ([]model.CronJob, error) {
 type acmeDB struct{ *sql.DB }
 
 func (d *acmeDB) GetCertificates() ([]model.ACMECertificate, error) {
-	rows, _ := d.DB.Query("SELECT id, name, domains, provider, dns_provider, dns_config, email, auto_renew, renew_days, expires_at, status FROM acme_certificates")
+	rows, err := d.DB.Query("SELECT id, name, domains, provider, dns_provider, dns_config, email, auto_renew, renew_days, expires_at, status FROM acme_certificates")
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	var certs []model.ACMECertificate
 	for rows.Next() {
 		var c model.ACMECertificate
 		var domains, dnsConfig string
-		rows.Scan(&c.ID, &c.Name, &domains, &c.Provider, &c.DNSProvider, &dnsConfig, &c.Email, &c.AutoRenew, &c.RenewDays, &c.ExpiresAt, &c.Status)
+		if err := rows.Scan(&c.ID, &c.Name, &domains, &c.Provider, &c.DNSProvider, &dnsConfig, &c.Email, &c.AutoRenew, &c.RenewDays, &c.ExpiresAt, &c.Status); err != nil {
+			return nil, err
+		}
 		json.Unmarshal([]byte(domains), &c.Domains)
 		json.Unmarshal([]byte(dnsConfig), &c.DNSConfig)
 		certs = append(certs, c)
@@ -318,13 +350,18 @@ func (d *acmeDB) UpdateCertificate(cert model.ACMECertificate) error {
 type storageDB struct{ *sql.DB }
 
 func (d *storageDB) GetMounts() ([]model.StorageMount, error) {
-	rows, _ := d.DB.Query("SELECT id, name, type, source, username, password, services, ftp_port, enabled FROM storage_mounts")
+	rows, err := d.DB.Query("SELECT id, name, type, source, username, password, services, ftp_port, enabled FROM storage_mounts")
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	var mounts []model.StorageMount
 	for rows.Next() {
 		var m model.StorageMount
 		var services string
-		rows.Scan(&m.ID, &m.Name, &m.Type, &m.Source, &m.Username, &m.Password, &services, &m.FTPPort, &m.Enabled)
+		if err := rows.Scan(&m.ID, &m.Name, &m.Type, &m.Source, &m.Username, &m.Password, &services, &m.FTPPort, &m.Enabled); err != nil {
+			return nil, err
+		}
 		json.Unmarshal([]byte(services), &m.Services)
 		mounts = append(mounts, m)
 	}
@@ -353,7 +390,7 @@ func loadProxyRule(db *sql.DB, id string) *model.ProxyRule {
 	if err != nil {
 		return nil
 	}
-	r.Domains = loadWireStrings(db, "proxy_domains", id)
+	r.Domains = loadWireDomains(db, id)
 	r.IPWhitelist = loadWireACL(db, "proxy_ip_whitelist", id)
 	r.IPBlacklist = loadWireACL(db, "proxy_ip_blacklist", id)
 	r.UAWhitelist = loadWireStrings(db, "proxy_ua_whitelist", id)
@@ -370,7 +407,9 @@ func loadWireACL(db *sql.DB, table, ruleID string) []model.ACLEntry {
 	var e []model.ACLEntry
 	for rows.Next() {
 		var a model.ACLEntry
-		rows.Scan(&a.ID, &a.Value)
+		if err := rows.Scan(&a.ID, &a.Value); err != nil {
+			return nil
+		}
 		e = append(e, a)
 	}
 	return e
@@ -385,7 +424,9 @@ func loadWireStrings(db *sql.DB, table, ruleID string) []string {
 	var s []string
 	for rows.Next() {
 		var v string
-		rows.Scan(&v)
+		if err := rows.Scan(&v); err != nil {
+			return nil
+		}
 		s = append(s, v)
 	}
 	return s
@@ -433,4 +474,21 @@ func loadStorageMount(db *sql.DB, id string) *model.StorageMount {
 	}
 	json.Unmarshal([]byte(services), &m.Services)
 	return &m
+}
+
+func loadWireDomains(db *sql.DB, ruleID string) []string {
+	rows, err := db.Query("SELECT domain FROM proxy_domains WHERE rule_id = ?", ruleID)
+	if err != nil || rows == nil {
+		return nil
+	}
+	defer rows.Close()
+	var s []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil
+		}
+		s = append(s, v)
+	}
+	return s
 }

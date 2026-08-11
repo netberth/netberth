@@ -46,7 +46,10 @@ func (h *STUNHandler) List(w http.ResponseWriter, r *http.Request) {
 	tunnels := make([]model.STUNTunnel, 0)
 	for rows.Next() {
 		var t model.STUNTunnel
-		rows.Scan(&t.ID, &t.Name, &t.Protocol, &t.LocalPort, &t.RemotePort, &t.STUNServer, &t.TargetAddr, &t.TargetPort, &t.Enabled, &t.CreatedAt, &t.UpdatedAt)
+		if err := rows.Scan(&t.ID, &t.Name, &t.Protocol, &t.LocalPort, &t.RemotePort, &t.STUNServer, &t.TargetAddr, &t.TargetPort, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "scan failed")
+			return
+		}
 		tunnels = append(tunnels, t)
 	}
 	utils.Success(w, tunnels)
@@ -105,7 +108,10 @@ func (h *WOLHandler) List(w http.ResponseWriter, r *http.Request) {
 	devices := make([]model.WOLDevice, 0)
 	for rows.Next() {
 		var d model.WOLDevice
-		rows.Scan(&d.ID, &d.Name, &d.MAC, &d.Broadcast, &d.Port, &d.Platform, &d.PlatformKey, &d.CreatedAt, &d.UpdatedAt)
+		if err := rows.Scan(&d.ID, &d.Name, &d.MAC, &d.Broadcast, &d.Port, &d.Platform, &d.PlatformKey, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "scan failed")
+			return
+		}
 		devices = append(devices, d)
 	}
 	utils.Success(w, devices)
@@ -166,7 +172,10 @@ func (h *CronHandler) List(w http.ResponseWriter, r *http.Request) {
 	jobs := make([]model.CronJob, 0)
 	for rows.Next() {
 		var j model.CronJob
-		rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Type, &j.Command, &j.ModuleID, &j.ModuleType, &j.Enabled, &j.LastRun, &j.NextRun, &j.CreatedAt, &j.UpdatedAt)
+		if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Type, &j.Command, &j.ModuleID, &j.ModuleType, &j.Enabled, &j.LastRun, &j.NextRun, &j.CreatedAt, &j.UpdatedAt); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "scan failed")
+			return
+		}
 		jobs = append(jobs, j)
 	}
 	utils.Success(w, jobs)
@@ -224,7 +233,10 @@ func (h *ACMEHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var c model.ACMECertificate
 		var domains, dnsConfig string
-		rows.Scan(&c.ID, &c.Name, &domains, &c.Provider, &c.DNSProvider, &dnsConfig, &c.Email, &c.AutoRenew, &c.RenewDays, &c.CertPath, &c.KeyPath, &c.ExpiresAt, &c.Status, &c.Error, &c.CreatedAt, &c.UpdatedAt)
+		if err := rows.Scan(&c.ID, &c.Name, &domains, &c.Provider, &c.DNSProvider, &dnsConfig, &c.Email, &c.AutoRenew, &c.RenewDays, &c.CertPath, &c.KeyPath, &c.ExpiresAt, &c.Status, &c.Error, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "scan failed")
+			return
+		}
 		json.Unmarshal([]byte(domains), &c.Domains)
 		json.Unmarshal([]byte(dnsConfig), &c.DNSConfig)
 		certs = append(certs, c)
@@ -298,7 +310,10 @@ func (h *StorageHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var m model.StorageMount
 		var services string
-		rows.Scan(&m.ID, &m.Name, &m.Type, &m.Source, &m.Username, &m.Password, &services, &m.FTPPort, &m.Enabled, &m.CreatedAt, &m.UpdatedAt)
+		if err := rows.Scan(&m.ID, &m.Name, &m.Type, &m.Source, &m.Username, &m.Password, &services, &m.FTPPort, &m.Enabled, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "scan failed")
+			return
+		}
 		json.Unmarshal([]byte(services), &m.Services)
 		mounts = append(mounts, m)
 	}

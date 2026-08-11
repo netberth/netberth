@@ -190,9 +190,34 @@ func osPort(t *testing.T) int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
+func freePortRange(t *testing.T, n int) int {
+	t.Helper()
+	for attempt := 0; attempt < 50; attempt++ {
+		base := osPort(t)
+		var ls []net.Listener
+		ok := true
+		for i := 0; i < n; i++ {
+			l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", base+i))
+			if err != nil {
+				ok = false
+				break
+			}
+			ls = append(ls, l)
+		}
+		for _, l := range ls {
+			l.Close()
+		}
+		if ok {
+			return base
+		}
+	}
+	t.Fatalf("could not find %d consecutive free ports", n)
+	return 0
+}
+
 func TestWebDAVPathIsolationReal(t *testing.T) {
 	base := t.TempDir()
-	port := 29000 + int(time.Now().UnixNano()%20000)
+	port := freePortRange(t, 3)
 
 	// Tenant A mount: Source=base, TenantID=tenantA → real root = base/tenantA/
 	eng := New(&mockMountDB{})
