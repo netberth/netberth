@@ -1,6 +1,6 @@
 # NetBerth Roadmap
 
-## v1.0 (current)
+## v1.0 ✅
 
 - [x] TCP/UDP port forwarding with CIDR ACL
 - [x] HTTP reverse proxy with wildcard routing
@@ -44,10 +44,15 @@
 - [x] Proxy `domains` 列不一致（schema `domain` vs 代码 `value`）已修复（2026-08-11）
 - [x] `SafePath` 加固：真正校验 base 包含关系，拒绝绝对路径/`..`/反斜杠/空字节（2026-08-11）
 
-## v1.1 Planned
+## v1.1 ✅ (released 2026-08-12)
 
 - [x] TLS termination for admin panel（NB_TLS_ENABLED，自动自签名或用户证书，TLS ≥ 1.2，2026-08-11）
 - [x] Multi-user management in UI（用户 CRUD/角色/禁用/重置密码，2026-08-11）
 - [x] Audit log dashboard（分页/过滤查询 API + 前端页面，2026-08-11）
 - [x] PostgreSQL support (multi-replica) — M1-M3 完成（docs/postgresql-support.md）；真实库集成验证由 `NB_TEST_POSTGRES_DSN` 门控
+## v1.2 Planned
+
 - [ ] P2P UDP hole punching with delta prediction
+- [ ] Admin panel i18n (中文/English)
+- [ ] Backup encryption (age/AES-GCM)
+- [ ] Webhook notifications

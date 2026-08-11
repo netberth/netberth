@@ -15,6 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/netberth/netberth/internal/engine/forward"
 	"github.com/netberth/netberth/pkg/logger"
+	"github.com/netberth/netberth/pkg/version"
 )
 
 var upgrader = websocket.Upgrader{
@@ -112,7 +113,7 @@ func (h *Hub) buildStatus() StatusMessage {
 		CPUCount:   runtime.NumCPU(),
 		Goroutines: runtime.NumGoroutine(),
 		MemoryMB:   mem.Alloc / 1024 / 1024,
-		Version:    "1.0.0-rc1",
+		Version:    version.Version,
 	}
 
 	stats := h.forwardEng.Status()

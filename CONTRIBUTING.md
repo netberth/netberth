@@ -9,12 +9,14 @@ NetBerth is dual-licensed: AGPL-3.0 for the open-source core, with a commercial 
 ```bash
 git clone https://github.com/netberth/netberth.git
 cd netberth
-go mod download
-go build ./...
+go build ./...          # vendor/ is committed; Go 1.25+ required
 go test -short ./...
 ```
 
 Frontend: `cd web && npm install && npm run build`
+
+Optional live PostgreSQL integration:
+`NB_TEST_POSTGRES_DSN=postgres://user:pass@host:5432/netberth go test ./internal/db/ -run TestPostgresIntegration`
 
 ## Pull Request Process
 

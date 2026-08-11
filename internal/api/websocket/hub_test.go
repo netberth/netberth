@@ -14,9 +14,10 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/netberth/netberth/internal/engine/forward"
 	"github.com/netberth/netberth/internal/model"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/netberth/netberth/pkg/version"
 )
 
 type mockForwardDB struct{}
@@ -62,7 +63,7 @@ func TestNewHubAndBuildStatus(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing system payload: %+v", payload)
 	}
-	if sys["version"] != "1.0.0-rc1" {
+	if sys["version"] != version.Version {
 		t.Fatalf("unexpected version: %v", sys["version"])
 	}
 	if _, ok := payload["forward"]; !ok {
@@ -119,4 +120,3 @@ func TestHandleWSUpgradeFailure(t *testing.T) {
 		t.Fatalf("expected no clients after failed upgrade, got %d", hub.clientCount())
 	}
 }
-

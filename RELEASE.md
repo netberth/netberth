@@ -1,84 +1,43 @@
-# NetBerth v1.0.0 — Commercial Release
+# NetBerth Release & Build Guide
 
-**2026-07-06** | Built on Go 1.26 | 44 Go files | 6,973 lines | 26 tests
+## Current Release
 
----
+**v1.1.0** (2026-08-12) — [GitHub Release](https://github.com/netberth/netberth/releases/tag/v1.1.0)
 
-## Product Overview
+- TLS termination for admin panel (`NB_TLS_ENABLED`, auto self-signed or user certs, TLS ≥ 1.2)
+- Multi-user management (CRUD, roles, enable/disable, password reset, last-admin protection)
+- Audit log dashboard (paginated/filtered API + admin UI)
+- PostgreSQL support (`NB_DB_DRIVER=postgres` + `NB_DB_DSN`)
+- Quality & security: full test coverage, SafePath hardening, deterministic FTP/WebDAV tests,
+  explicit SQL error handling, config env-override fix for Docker deployments
 
-NetBerth is a **security-first, single-binary network service management platform** — replacing and surpassing Lucky. Deploy via Docker, access via enterprise-grade React SPA. Port forwarding, reverse proxy, DDNS, STUN NAT traversal, Wake-on-LAN, cron scheduling, ACME certificates, and network storage (FTP/WebDAV/FileBrowser) in one 11MB binary.
+## Building a Release
 
----
-
-## Deployment
-
-### Docker (30 seconds)
 ```bash
-docker run -d --name netberth --network host \
-  -v netberth-data:/app/data \
-  -e NB_JWT_SECRET=$(openssl rand -base64 48) \
-  netberth/netberth:latest
+./scripts/release.sh    # requires zig (brew install zig)
 ```
 
-### Binary
+The script:
+
+1. Builds the React frontend and embeds it into `internal/api/handler/webroot/`
+2. Cross-compiles `netberth-linux-amd64` and `netberth-linux-arm64` with
+   `zig cc` (static musl), `-trimpath -buildvcs=false`, and a CC wrapper that
+   maps `$HOME` to `/BUILDER`
+3. Runs mandatory strings checks (user paths, `netharbor`, `GenerateLicense`,
+   internal IPs, historical secrets, other account names) — any nonzero fails the build
+4. Writes `sha256sums.txt`
+
+Artifacts land in `dist/release/` (override with `OUT=...`).
+
+## Publishing
+
 ```bash
-NB_JWT_SECRET=$(openssl rand -base64 48) ./netberth
+gh release create v<version> --draft --title "NetBerth v<version>" \
+  --notes-file notes.md dist/release/netberth-linux-amd64 \
+  dist/release/netberth-linux-arm64 dist/release/sha256sums.txt
+# review the draft, then:
+gh release edit v<version> --draft=false
 ```
-
-**Admin**: `http://<ip>:8443`  
-**Credentials**: printed to stdout on first run. Change immediately.
-
----
-
-## Feature Matrix
-
-| Module | Capability | vs Lucky |
-|--------|-----------|----------|
-| **Port Forwarding** | TCP/UDP dual-stack, IPv4/IPv6, CIDR ACL, max connections, scheduled toggle | = |
-| **Reverse Proxy** | Dynamic reload, wildcard domains, IP/UA ACL, WebSocket, basic auth (hashed) | > |
-| **DDNS** | 9 providers: Cloudflare, Aliyun (HMAC-SHA1), DNSPod (TC3-SHA256), GoDaddy, DuckDNS, No-IP, Dynv6, Namecheap, ClouDNS | = core, fewer providers |
-| **STUN** | RFC 5389 Binding Request, XOR-MAPPED-ADDRESS, NAT type detection (Full Cone→Symmetric), 3s timeout, 3× retry, session reuse | = |
-| **WOL** | Magic packet, IPv6-safe addressing, IoT platform ready | = |
-| **Cron** | robfig/cron v3, shell commands, module toggle | = |
-| **ACME** | Let's Encrypt integration, DNS-01, ECDSA P-256, auto-renew | = |
-| **Storage** | FileBrowser (HTTP), WebDAV, RFC 959 FTP (fclairamb/ftpserverlib) | > (FTP library) |
-| **Admin UI** | React 18 + shadcn/ui + TypeScript, dark theme, 10 pages, WebSocket real-time | ≫ (far superior) |
-| **Security** | Argon2id 64MB/3-pass, JWT rotation 15m/7d, RBAC admin/operator/viewer, rate limiting, CIDR ACL, audit trail, security headers, path traversal prevention | ≫ |
-| **Commercial** | Tiered licensing (Free/Pro/Enterprise), license key HMAC validation, backup/restore API, upgrade script, Docker Hub CI/CD | New |
-
----
-
-## Architecture
-
-```
-netberth (11MB single binary)
-├── Embedded React SPA (webroot/)
-├── REST API (/api/v1/*)
-├── WebSocket (/api/v1/ws) — real-time status
-├── 8 Engines — each independent, dynamic reload, event-driven
-├── SQLite WAL — concurrent readers, txlock=immediate, PRAGMA hardened
-├── Argon2id + JWT Auth — with TOTP support
-├── CIDR ACL — net/netip, O(1) Contains, IPv4/IPv6
-└── Audit Trail — resource_type, resource_id, action, JSON diff
-```
-
-## Test Suite
-
-```
-PASS  acl    6/6   91.9% coverage   CIDR match, blacklist priority, IPv6
-PASS  auth   6/6   51.9% coverage   Argon2id, JWT, OTP, uniqueness
-PASS  stun   9/9   65.8% coverage   Mock server, timeout, retry, NAT detect
-PASS  storage 5/5  71.6% coverage   FTP connect, reload, FileBrowser, WebDAV
-──────────
-TOTAL 26/26   0 FAIL   race detector clean
-```
-
-## Breaking Changes from v0.x
-
-- Schema v2: `[]string` → relational tables (`forward_whitelist`, `proxy_domains`, etc.)
-- `basic_auth_pass` → `basic_auth_hash` (argon2id)
-- `tenant_id` + `owner_id` on all resources
-- Audit table redesigned: `resource_type`, `resource_id`, `action`, `changes`
 
 ## Upgrade Path
 
@@ -86,7 +45,7 @@ TOTAL 26/26   0 FAIL   race detector clean
 ./scripts/upgrade.sh    # auto-backup, pull, restart
 ```
 
-Data in `/app/data` persists. Migrations run automatically.
+Data in `/app/data` persists. Migrations run automatically (SQLite and PostgreSQL).
 
 ## License Tiers
 
@@ -97,11 +56,3 @@ Data in `/app/data` persists. Migrations run automatically.
 | Enterprise | Unlimited | SLA + Custom | Contact |
 
 Activate via Settings page or `POST /api/v1/license/activate`.
-
----
-
-## Team
-
-Built by a virtual team of 7 roles: PM, Architect, Lead Dev, Backend Dev, Frontend Dev, QA/Security, DevOps — 38 goals completed.
-
-**NetBerth is production-ready.**

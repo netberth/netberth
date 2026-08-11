@@ -10,18 +10,19 @@ We aim to acknowledge reports within 48 hours and release fixes within 7 days.
 
 | Version | Status |
 |---------|--------|
-| 1.0.0-rc1 | Active development |
+| 1.1.0 | Active |
+| 1.0.0-rc1 | EOL |
 
 ## Security Architecture
 
 - Authentication: Argon2id + JWT (HS256, 15m/7d rotation)
 - Authorization: RBAC (admin/operator/viewer) + ForcePasswordChange
 - Transport: rate limiting + CSRF + brute-force protection
-- Data: SQLite WAL with _txlock=immediate
+- Data: SQLite WAL (default, _txlock=immediate) or PostgreSQL (NB_DB_DRIVER/NB_DB_DSN)
 - Path isolation: afero.BasePathFs (FTP) + HasPrefix guard (WebDAV)
 
 ## Known Limitations
 
-- No TLS termination built-in (use reverse proxy)
-- SQLite: single-writer concurrency model
+- TLS is optional (`NB_TLS_ENABLED`); auto-generated certificates are self-signed and need manual trust
+- SQLite is single-writer; use PostgreSQL for multi-writer deployments
 - WebSocket: no auth on /ws endpoint (serves public stats only)

@@ -7,11 +7,13 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/netberth/netberth/pkg/version"
 )
 
 var docs = map[string]interface{}{
 	"title":   "NetBerth Documentation",
-	"version": "1.0.0-rc1",
+	"version": version.Version,
 	"sections": []map[string]interface{}{
 		{
 			"title":       "Quick Start",

@@ -1,4 +1,4 @@
-.PHONY: build run dev docker-build docker-up clean web-build
+.PHONY: build run dev docker-build docker-up clean web-build release
 
 APP=netberth
 GO=go
@@ -8,10 +8,10 @@ build:
 	CGO_ENABLED=1 $(GO) build -ldflags="-s -w" -o bin/$(APP) ./cmd/$(APP)
 
 run: build
-	NH_JWT_SECRET=$$(openssl rand -base64 48) NH_LOG_LEVEL=info ./bin/$(APP)
+	NB_JWT_SECRET=$$(openssl rand -base64 48) NB_LOG_LEVEL=info ./bin/$(APP)
 
 dev:
-	NH_LOG_FORMAT=console NH_JWT_SECRET=dev-secret-do-not-use-in-production \
+	NB_LOG_FORMAT=console NB_JWT_SECRET=dev-secret-do-not-use-in-production \
 		$(GO) run ./cmd/$(APP)
 
 web-build:
@@ -46,3 +46,6 @@ test-cover:
 	$(GO) tool cover -html=coverage.out -o coverage.html
 
 all: web-build build
+
+release:
+	./scripts/release.sh

@@ -17,6 +17,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/netberth/netberth/internal/auth"
 	"github.com/netberth/netberth/internal/model"
+	"github.com/netberth/netberth/pkg/version"
 )
 
 func sqlOpen(dsn string) (*sql.DB, error) { return sql.Open("sqlite3", dsn) }
@@ -138,8 +139,8 @@ func TestSystemStatusHandler(t *testing.T) {
 	var resp map[string]interface{}
 	json.NewDecoder(w.Body).Decode(&resp)
 	v := resp["data"].(map[string]interface{})["version"]
-	if v != "1.0.0-rc1" {
-		t.Errorf("expected version 1.0.0-rc1, got %v", v)
+	if v != version.Version {
+		t.Errorf("expected version %s, got %v", version.Version, v)
 	}
 }
 

@@ -36,6 +36,9 @@ make build && make run
 | **ACME Certificates** | Self-signed with ECDSA P-256. Auto-renew with configurable threshold |
 | **Network Storage** | Local/WebDAV mount. FileBrowser, WebDAV, FTP service endpoints |
 | **User Management** | Multi-user accounts, admin/operator/viewer roles, enable/disable, password reset |
+| **Admin TLS** | HTTPS panel with auto self-signed or user-provided certificates (TLS 1.2+) |
+| **Audit Log** | Paginated audit trail with filters (admin only) |
+| **Database** | SQLite by default; PostgreSQL via NB_DB_DRIVER / NB_DB_DSN |
 
 ## Architecture
 
@@ -49,11 +52,11 @@ netberth/
 │   ├── api/websocket/     # Real-time status streaming (2s interval)
 │   ├── auth/              # Argon2id + JWT + TOTP
 │   ├── config/            # YAML + env override
-│   ├── db/                # SQLite WAL, 10 tables, auto-migration
+│   ├── db/                # SQLite (default) or PostgreSQL, auto-migration
 │   ├── engine/            # 8 network engines (each self-contained)
 │   ├── model/             # Shared data models
 │   └── service/           # EventBus + Wire — connects handlers to engines
-├── pkg/                   # Logger, response utils
+├── pkg/                   # Logger, response utils, validator, retry, version
 ├── web/                   # React 18 + TypeScript + shadcn/ui + Tailwind
 ├── scripts/               # Docker entrypoint
 ├── Dockerfile             # Multi-stage, <20MB

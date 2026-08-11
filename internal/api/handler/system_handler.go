@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/netberth/netberth/pkg/utils"
+	"github.com/netberth/netberth/pkg/version"
 )
 
 // StartTime is the process start timestamp. Set from main.go during initialization.
@@ -28,7 +29,7 @@ func (h *SystemHandler) Status(w http.ResponseWriter, r *http.Request) {
 	runtime.ReadMemStats(&memStats)
 	status := map[string]interface{}{
 		"hostname":   hostname,
-		"version":    "1.0.0-rc1",
+		"version":    version.Version,
 		"go_version": runtime.Version(),
 		"os":         runtime.GOOS,
 		"arch":       runtime.GOARCH,
@@ -63,7 +64,9 @@ func (h *SystemHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	if storageMounts == nil { storageMounts = make([]map[string]interface{}, 0) }
+	if storageMounts == nil {
+		storageMounts = make([]map[string]interface{}, 0)
+	}
 
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -71,7 +74,7 @@ func (h *SystemHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	payload := map[string]interface{}{
 		"modules":        modules,
 		"storage_mounts": storageMounts,
-		"version":        "1.0.0-rc1",
+		"version":        version.Version,
 		"uptime":         int64(time.Since(StartTime).Seconds()),
 		"goroutines":     runtime.NumGoroutine(),
 		"memory_mb":      m.Alloc / 1024 / 1024,

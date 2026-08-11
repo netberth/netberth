@@ -81,7 +81,7 @@ sudo docker compose logs netberth | grep "ADMIN CREDENTIALS"
 curl http://localhost:8443/api/v1/system/status
 
 # 预期返回：
-# {"success":true,"data":{"hostname":"...","version":"0.1.0",...}}
+# {"success":true,"data":{"hostname":"...","version":"1.1.0",...}}
 
 # 查看实时日志
 docker compose logs -f netberth
@@ -108,6 +108,18 @@ environment:
 
 `NB_TLS_CERT` 与 `NB_TLS_KEY` 必须成对设置；证书缺失或无法加载时服务会拒绝启动（不会静默回退到 HTTP）。
 
+## 使用 PostgreSQL
+
+默认 SQLite 零配置。需要 PostgreSQL（多实例/多副本）时：
+
+```yaml
+environment:
+  - NB_DB_DRIVER=postgres
+  - NB_DB_DSN=postgres://user:pass@host:5432/netberth
+```
+
+JWT secret、TLS 证书等本地状态仍存放在 `./data/`。迁移在启动时自动执行。
+
 ## 首次登录
 
 1. 浏览器打开 `https://<设备IP>:8443`（未启用 TLS 时用 `http://`）
@@ -119,8 +131,9 @@ environment:
 
 | 目录 | 用途 |
 |------|------|
-| `./data/` | SQLite 数据库 + JWT 密钥 |
-| `./certs/` | SSL 证书存储 |
+| `./data/` | SQLite 数据库（或本地状态）+ JWT 密钥 |
+| `./data/tls/` | 自动生成的自签名 TLS 证书 |
+| `./certs/` | 用户提供的 SSL 证书 |
 
 删除这些目录会丢失所有配置（重置为初始状态）。
 
