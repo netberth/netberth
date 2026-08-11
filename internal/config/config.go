@@ -80,14 +80,15 @@ func Load(path string) (*Config, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, nil
+		if !os.IsNotExist(err) {
+			return nil, err
 		}
+	} else if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, err
-	}
+	// Env overrides must apply whether or not a config file exists. A missing
+	// config file is the normal deployment shape (e.g. Docker), and skipping
+	// applyEnv here silently disabled every NB_* variable.
 	cfg.applyEnv()
 	return cfg, nil
 }

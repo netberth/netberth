@@ -130,3 +130,24 @@ func TestDatabaseDriverEnv(t *testing.T) {
 		t.Fatalf("unexpected env database config: %+v", c.Database)
 	}
 }
+
+func TestLoadMissingFileAppliesEnv(t *testing.T) {
+	t.Setenv("NB_SERVER_HOST", "127.0.0.1")
+	t.Setenv("NB_SERVER_PORT", "19443")
+	t.Setenv("NB_TLS_ENABLED", "true")
+	t.Setenv("NB_DB_PATH", "/env/data/nb.db")
+
+	c, err := Load(filepath.Join(t.TempDir(), "missing.yaml"))
+	if err != nil {
+		t.Fatalf("load missing: %v", err)
+	}
+	if c.Server.Host != "127.0.0.1" || c.Server.Port != 19443 {
+		t.Fatalf("env host/port not applied without config file: %+v", c.Server)
+	}
+	if !c.Server.TLSEnabled {
+		t.Fatal("env TLS not applied without config file")
+	}
+	if c.Database.Path != "/env/data/nb.db" {
+		t.Fatalf("env db path not applied: %s", c.Database.Path)
+	}
+}
