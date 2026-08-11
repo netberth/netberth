@@ -31,7 +31,9 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Path string `yaml:"path" env:"NB_DB_PATH"`
+	Path   string `yaml:"path" env:"NB_DB_PATH"`
+	Driver string `yaml:"driver" env:"NB_DB_DRIVER"` // sqlite (default) or postgres
+	DSN    string `yaml:"dsn" env:"NB_DB_DSN"`       // postgres://... when driver=postgres
 }
 
 type AuthConfig struct {
@@ -112,6 +114,12 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("NB_DB_PATH"); v != "" {
 		c.Database.Path = v
+	}
+	if v := os.Getenv("NB_DB_DRIVER"); v != "" {
+		c.Database.Driver = strings.ToLower(strings.TrimSpace(v))
+	}
+	if v := os.Getenv("NB_DB_DSN"); v != "" {
+		c.Database.DSN = v
 	}
 	if v := os.Getenv("NB_JWT_SECRET"); v != "" {
 		c.Auth.JWTSecret = v

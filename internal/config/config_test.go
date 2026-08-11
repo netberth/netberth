@@ -102,3 +102,31 @@ func TestParsePort(t *testing.T) {
 		}
 	}
 }
+
+func TestDatabaseDriverConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	yaml := `database:
+  driver: postgres
+  dsn: postgres://user:pass@localhost:5432/netberth
+`
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if c.Database.Driver != "postgres" || c.Database.DSN != "postgres://user:pass@localhost:5432/netberth" {
+		t.Fatalf("unexpected database config: %+v", c.Database)
+	}
+}
+
+func TestDatabaseDriverEnv(t *testing.T) {
+	t.Setenv("NB_DB_DRIVER", "POSTGRES")
+	t.Setenv("NB_DB_DSN", "postgres://u:p@h:5432/db")
+	c := Default()
+	c.applyEnv()
+	if c.Database.Driver != "postgres" || c.Database.DSN != "postgres://u:p@h:5432/db" {
+		t.Fatalf("unexpected env database config: %+v", c.Database)
+	}
+}

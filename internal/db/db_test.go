@@ -188,3 +188,36 @@ func TestEnsureColumn(t *testing.T) {
 		t.Fatalf("ensureColumn idempotent: %v", err)
 	}
 }
+
+func TestOpenDatabaseSQLite(t *testing.T) {
+	db, err := OpenDatabase("", filepath.Join(t.TempDir(), "open.db"))
+	if err != nil {
+		t.Fatalf("open default driver: %v", err)
+	}
+	if err := db.Ping(); err != nil {
+		t.Fatalf("ping: %v", err)
+	}
+	db.Close()
+
+	db2, err := OpenDatabase("sqlite", filepath.Join(t.TempDir(), "open2.db"))
+	if err != nil {
+		t.Fatalf("open sqlite driver: %v", err)
+	}
+	db2.Close()
+}
+
+func TestOpenDatabaseUnsupportedDriver(t *testing.T) {
+	if _, err := OpenDatabase("mysql", "x"); err == nil {
+		t.Fatal("expected error for unsupported driver")
+	}
+}
+
+func TestOpenDatabasePostgresBadDSN(t *testing.T) {
+	db, err := OpenDatabase("postgres", "postgres://u:p@127.0.0.1:1/nope?connect_timeout=1")
+	if err == nil {
+		if db != nil {
+			db.Close()
+		}
+		t.Fatal("expected error for unreachable postgres")
+	}
+}

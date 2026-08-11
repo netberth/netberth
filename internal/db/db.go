@@ -16,7 +16,26 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// Open opens a SQLite database at path (the default driver).
 func Open(path string) (*sql.DB, error) {
+	return openSQLite(path)
+}
+
+// OpenDatabase opens a database for the given driver: sqlite (default) or
+// postgres. dsn is a filesystem path for sqlite and a connection string for
+// postgres.
+func OpenDatabase(driverName, dsn string) (*sql.DB, error) {
+	switch driverName {
+	case "", "sqlite":
+		return openSQLite(dsn)
+	case "postgres", "postgresql":
+		return openPostgres(dsn)
+	default:
+		return nil, fmt.Errorf("unsupported database driver: %s", driverName)
+	}
+}
+
+func openSQLite(path string) (*sql.DB, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
@@ -70,9 +89,10 @@ func SeedAdminUser(db *sql.DB, passwordHash string) (bool, error) {
 	if count > 0 {
 		return false, nil
 	}
-	// Create default tenant first (required by FK)
+	// Create default tenant first (required by FK). ON CONFLICT keeps this
+	// portable across SQLite and Postgres.
 	tenantID := newUUID()
-	db.Exec("INSERT OR IGNORE INTO tenants (id, name, plan) VALUES (?, ?, ?)", tenantID, "Default", "free")
+	db.Exec("INSERT INTO tenants (id, name, plan) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING", tenantID, "Default", "free")
 	id := newUUID()
 	_, err := db.Exec(
 		"INSERT INTO users (id, tenant_id, username, password_hash, role) VALUES (?, ?, ?, ?, ?)",
@@ -87,4 +107,32 @@ func newUUID() string {
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// openPostgres connects via the rebinding pgx driver and runs Postgres
+// migrations. Queries throughout the codebase keep using '?' placeholders;
+// the driver wrapper converts them to $N.
+func openPostgres(dsn string) (*sql.DB, error) {
+	if dsn == "" {
+		return nil, fmt.Errorf("postgres driver requires NB_DB_DSN")
+	}
+	database, err := sql.Open("pgx-rebind", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open postgres: %w", err)
+	}
+	conns := max(2, runtime.NumCPU()-1)
+	database.SetMaxOpenConns(conns)
+	database.SetMaxIdleConns(conns)
+	database.SetConnMaxLifetime(5 * time.Minute)
+	database.SetConnMaxIdleTime(1 * time.Minute)
+
+	if err := database.Ping(); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("ping postgres: %w", err)
+	}
+	if err := runPostgresMigrations(database); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("postgres migrations: %w", err)
+	}
+	return database, nil
 }

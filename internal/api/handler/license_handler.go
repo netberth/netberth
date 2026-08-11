@@ -42,12 +42,14 @@ func (h *LicenseHandler) Status(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LicenseHandler) Activate(w http.ResponseWriter, r *http.Request) {
-	var body struct{ Key string `json:"license_key"` }
+	var body struct {
+		Key string `json:"license_key"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		utils.Error(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	h.db.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('license_key', ?)", body.Key)
+	h.db.Exec("INSERT INTO settings (key, value) VALUES ('license_key', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", body.Key)
 	utils.Success(w, map[string]interface{}{
 		"tier": "community",
 		"note": "license activation requires enterprise build",
@@ -56,7 +58,9 @@ func (h *LicenseHandler) Activate(w http.ResponseWriter, r *http.Request) {
 
 func extractTenant(r *http.Request) string {
 	if v := r.Context().Value(contextKey("tenant_id")); v != nil {
-		if s, ok := v.(string); ok { return s }
+		if s, ok := v.(string); ok {
+			return s
+		}
 	}
 	return "system_default"
 }

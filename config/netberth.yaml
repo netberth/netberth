@@ -9,7 +9,9 @@ server:
   tls_key: ""        # NB_TLS_KEY — optional PEM key path
 
 database:
-  path: ./data/netberth.db
+  path: ./data/netberth.db # NB_DB_PATH
+  driver: sqlite           # NB_DB_DRIVER — sqlite (default) or postgres
+  dsn: ""                  # NB_DB_DSN — postgres://user:pass@host:5432/netberth
 
 auth:
   jwt_secret: "" # Set via NB_JWT_SECRET env var

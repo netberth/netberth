@@ -49,5 +49,5 @@
 - [x] TLS termination for admin panel（NB_TLS_ENABLED，自动自签名或用户证书，TLS ≥ 1.2，2026-08-11）
 - [x] Multi-user management in UI（用户 CRUD/角色/禁用/重置密码，2026-08-11）
 - [x] Audit log dashboard（分页/过滤查询 API + 前端页面，2026-08-11）
-- [ ] PostgreSQL support (multi-replica)
+- [x] PostgreSQL support (multi-replica) — M1-M3 完成（docs/postgresql-support.md）；真实库集成验证由 `NB_TEST_POSTGRES_DSN` 门控
 - [ ] P2P UDP hole punching with delta prediction

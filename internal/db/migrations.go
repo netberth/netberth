@@ -9,8 +9,8 @@ import (
 	"fmt"
 )
 
-func runMigrations(db *sql.DB) error {
-	migrations := []string{
+func sqliteMigrations() []string {
+	return []string{
 		// === Tenants & Users ===
 		`CREATE TABLE IF NOT EXISTS tenants (
 			id TEXT PRIMARY KEY,
@@ -251,7 +251,10 @@ func runMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_events(tenant_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_events(created_at)`,
 	}
-	for _, m := range migrations {
+}
+
+func runMigrations(db *sql.DB) error {
+	for _, m := range sqliteMigrations() {
 		if _, err := db.Exec(m); err != nil {
 			return err
 		}

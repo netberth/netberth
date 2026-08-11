@@ -107,6 +107,8 @@ Environment variables override `config/netberth.yaml`:
 | `NB_SERVER_PORT` | `8443` | Listen port |
 | `NB_JWT_SECRET` | auto-generated | JWT signing key (required for multi-instance) |
 | `NB_DB_PATH` | `./data/netberth.db` | SQLite database path |
+| `NB_DB_DRIVER` | `sqlite` | `sqlite` (default) or `postgres` |
+| `NB_DB_DSN` | empty | Postgres connection string (e.g. `postgres://user:pass@host:5432/netberth`) |
 | `NB_LOG_LEVEL` | `info` | debug/info/warn/error |
 | `NB_CONFIG_PATH` | `config/netberth.yaml` | Config file path |
 | `NB_TLS_ENABLED` | `false` | Serve the admin panel over HTTPS (TLS 1.2+) |

@@ -22,6 +22,7 @@ import (
 	"github.com/netberth/netberth/internal/config"
 	"github.com/netberth/netberth/internal/db"
 	"github.com/netberth/netberth/internal/service"
+	"github.com/netberth/netberth/internal/tlsutil"
 	"github.com/netberth/netberth/pkg/logger"
 )
 
@@ -33,9 +34,16 @@ func main() {
 	}
 	logger.Init(cfg.Log.Level, cfg.Log.Format)
 
+	// SQLite stores everything next to the DB file; Postgres keeps local
+	// state (JWT secret, certs) under ./data.
+	dataDir := filepath.Dir(cfg.Database.Path)
+	if cfg.Database.Driver != "" && cfg.Database.Driver != "sqlite" {
+		dataDir = "./data"
+	}
+
 	jwtSecret := cfg.Auth.JWTSecret
 	if jwtSecret == "" {
-		secretPath := filepath.Join(filepath.Dir(cfg.Database.Path), ".jwt_secret")
+		secretPath := filepath.Join(dataDir, ".jwt_secret")
 		if data, err := os.ReadFile(secretPath); err == nil && len(data) > 0 {
 			jwtSecret = string(data)
 			logger.Log.Info().Msg("JWT secret loaded from persisted file")
@@ -50,7 +58,11 @@ func main() {
 		}
 	}
 
-	database, err := db.Open(cfg.Database.Path)
+	dbDSN := cfg.Database.Path
+	if cfg.Database.Driver != "" && cfg.Database.Driver != "sqlite" {
+		dbDSN = cfg.Database.DSN
+	}
+	database, err := db.OpenDatabase(cfg.Database.Driver, dbDSN)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to open database")
 	}
@@ -77,7 +89,7 @@ func main() {
 			Msg("ADMIN CREDENTIALS — change immediately after login")
 	}
 
-	certDir := filepath.Join(filepath.Dir(cfg.Database.Path), "certs")
+	certDir := filepath.Join(dataDir, "certs")
 	wire := service.NewWire(database, certDir)
 	if err := wire.StartAll(); err != nil {
 		logger.Log.Warn().Err(err).Msg("some engines failed to start")
@@ -95,8 +107,40 @@ func main() {
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
 
+	scheme := "http"
+	if cfg.Server.TLSEnabled {
+		certPath, keyPath := cfg.Server.TLSCert, cfg.Server.TLSKey
+		if certPath == "" && keyPath == "" {
+			certPath = filepath.Join(dataDir, "tls", "server.crt")
+			keyPath = filepath.Join(dataDir, "tls", "server.key")
+			tlsCert, err := tlsutil.EnsureSelfSigned(certPath, keyPath, []string{"localhost", "127.0.0.1", "::1"})
+			if err != nil {
+				logger.Log.Fatal().Err(err).Msg("failed to create self-signed TLS certificate")
+			}
+			srv.TLSConfig = tlsutil.ServerTLSConfig(tlsCert)
+			logger.Log.Warn().Str("cert", certPath).
+				Msg("TLS enabled with auto-generated self-signed certificate — replace with a trusted certificate for production")
+		} else {
+			if certPath == "" || keyPath == "" {
+				logger.Log.Fatal().Msg("NB_TLS_CERT and NB_TLS_KEY must be set together")
+			}
+			tlsCert, err := tlsutil.Load(certPath, keyPath)
+			if err != nil {
+				logger.Log.Fatal().Err(err).Msg("failed to load TLS certificate")
+			}
+			srv.TLSConfig = tlsutil.ServerTLSConfig(tlsCert)
+		}
+		scheme = "https"
+	}
+
 	go func() {
-		logger.Log.Info().Str("addr", addr).Msg("NetBerth starting")
+		logger.Log.Info().Str("addr", addr).Str("scheme", scheme).Msg("NetBerth starting")
+		if cfg.Server.TLSEnabled {
+			if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				logger.Log.Fatal().Err(err).Msg("server failed")
+			}
+			return
+		}
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Log.Fatal().Err(err).Msg("server failed")
 		}
