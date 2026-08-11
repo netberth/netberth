@@ -15,6 +15,8 @@ import { Cron } from '@/pages/Cron'
 import { ACME } from '@/pages/ACME'
 import { Storage } from '@/pages/Storage'
 import { Settings } from '@/pages/Settings'
+import { Users } from '@/pages/Users'
+import { Audit } from '@/pages/Audit'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -63,6 +65,8 @@ export default function App() {
           <Route path="/acme" element={<ProtectedRoute><ACME /></ProtectedRoute>} />
           <Route path="/storage" element={<ProtectedRoute><Storage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+          <Route path="/audit" element={<ProtectedRoute><Audit /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

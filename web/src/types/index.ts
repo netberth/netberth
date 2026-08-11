@@ -3,7 +3,10 @@ export interface User {
   username: string
   email: string
   role: 'admin' | 'operator' | 'viewer'
+  enabled: boolean
   otp_enabled: boolean
+  created_at?: string
+  updated_at?: string
 }
 
 export interface TokenPair {
@@ -151,6 +154,19 @@ export interface SystemStatus {
   goroutines: number
   memory_mb: number
   uptime: number
+}
+
+export interface AuditEvent {
+  id: number
+  tenant_id: string
+  user_id: string
+  username: string
+  action: string
+  resource_type: string
+  resource_id: string
+  changes: string
+  remote_addr: string
+  created_at: string
 }
 
 export interface APIResponse<T = unknown> {

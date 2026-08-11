@@ -87,9 +87,30 @@ curl http://localhost:8443/api/v1/system/status
 docker compose logs -f netberth
 ```
 
+## 启用 HTTPS（管理面板 TLS）
+
+默认面板走 HTTP。启用 TLS 后必须用 `https://` 访问：
+
+```yaml
+environment:
+  - NB_TLS_ENABLED=true
+```
+
+- **不配置证书**：自动生成自签名证书（保存在 `./data/tls/`，有效期 10 年），浏览器会提示不受信任，适合内网使用。
+- **配置自己的证书**（推荐，可用受信任证书或内网 CA）：
+
+```yaml
+environment:
+  - NB_TLS_ENABLED=true
+  - NB_TLS_CERT=/app/certs/server.crt
+  - NB_TLS_KEY=/app/certs/server.key
+```
+
+`NB_TLS_CERT` 与 `NB_TLS_KEY` 必须成对设置；证书缺失或无法加载时服务会拒绝启动（不会静默回退到 HTTP）。
+
 ## 首次登录
 
-1. 浏览器打开 `http://<设备IP>:8443`
+1. 浏览器打开 `https://<设备IP>:8443`（未启用 TLS 时用 `http://`）
 2. 用户名：`admin`
 3. 密码：从日志中获取（搜索 `ADMIN CREDENTIALS`）
 4. 登录后立即在 Settings 页面修改密码

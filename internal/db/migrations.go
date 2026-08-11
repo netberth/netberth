@@ -4,7 +4,10 @@
 
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+	"fmt"
+)
 
 func runMigrations(db *sql.DB) error {
 	migrations := []string{
@@ -253,5 +256,33 @@ func runMigrations(db *sql.DB) error {
 			return err
 		}
 	}
+
+	// users.enabled: added in v1.1 (multi-user management). Existing databases
+	// need a conditional ALTER TABLE because migrations run on every startup.
+	if err := ensureColumn(db, "users", "enabled", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+		return err
+	}
 	return nil
+}
+
+// ensureColumn adds column to table if it does not exist yet.
+func ensureColumn(db *sql.DB, table, column, ddl string) error {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, ddl))
+	return err
 }

@@ -29,10 +29,19 @@ func (f *fakeCRUD) record(method string) {
 	f.calls = append(f.calls, method)
 }
 
-func (f *fakeCRUD) List(w http.ResponseWriter, r *http.Request)  { f.record("GET"); w.WriteHeader(200) }
-func (f *fakeCRUD) Create(w http.ResponseWriter, r *http.Request) { f.record("POST"); w.WriteHeader(201) }
-func (f *fakeCRUD) Update(w http.ResponseWriter, r *http.Request) { f.record("PUT"); w.WriteHeader(200) }
-func (f *fakeCRUD) Delete(w http.ResponseWriter, r *http.Request) { f.record("DELETE"); w.WriteHeader(200) }
+func (f *fakeCRUD) List(w http.ResponseWriter, r *http.Request) { f.record("GET"); w.WriteHeader(200) }
+func (f *fakeCRUD) Create(w http.ResponseWriter, r *http.Request) {
+	f.record("POST")
+	w.WriteHeader(201)
+}
+func (f *fakeCRUD) Update(w http.ResponseWriter, r *http.Request) {
+	f.record("PUT")
+	w.WriteHeader(200)
+}
+func (f *fakeCRUD) Delete(w http.ResponseWriter, r *http.Request) {
+	f.record("DELETE")
+	w.WriteHeader(200)
+}
 
 func TestRegisterCRUD(t *testing.T) {
 	r := chi.NewRouter()
@@ -88,7 +97,7 @@ func TestBusNotifier(t *testing.T) {
 	}
 }
 
-func newTestRouter(t *testing.T) http.Handler {
+func newTestRouter(t *testing.T) (http.Handler, string, string) {
 	t.Helper()
 	database, err := db.Open(filepath.Join(t.TempDir(), "netberth.db"))
 	if err != nil {
@@ -104,8 +113,8 @@ func newTestRouter(t *testing.T) http.Handler {
 	if _, err := db.SeedAdminUser(database, hash); err != nil {
 		t.Fatalf("seed admin: %v", err)
 	}
-	var userID string
-	if err := database.QueryRow("SELECT id FROM users WHERE username='admin'").Scan(&userID); err != nil {
+	var userID, tenantID string
+	if err := database.QueryRow("SELECT id, tenant_id FROM users WHERE username='admin'").Scan(&userID, &tenantID); err != nil {
 		t.Fatalf("query admin: %v", err)
 	}
 	database.Exec("UPDATE users SET password_changed=1 WHERE id=?", userID)
@@ -114,14 +123,30 @@ func newTestRouter(t *testing.T) http.Handler {
 	hub := websocket.NewHub(wire.Forward, database)
 	r := New(database, authSvc, wire, hub)
 
-	if _, err := authSvc.GenerateTokens(&model.User{ID: userID, Username: "admin", Role: "admin"}); err != nil {
-		t.Fatalf("generate tokens: %v", err)
+	adminTokens, err := authSvc.GenerateTokens(&model.User{ID: userID, Username: "admin", Role: "admin"})
+	if err != nil {
+		t.Fatalf("generate admin tokens: %v", err)
 	}
-	return r
+
+	opHash, err := authSvc.HashPassword("operatorpass123")
+	if err != nil {
+		t.Fatalf("hash operator password: %v", err)
+	}
+	if _, err := database.Exec(
+		"INSERT INTO users (id, tenant_id, username, email, password_hash, role, enabled, password_changed) VALUES (?,?,?,?,?,?,1,1)",
+		"op-user", tenantID, "operator", "op@example.com", opHash, "operator",
+	); err != nil {
+		t.Fatalf("seed operator: %v", err)
+	}
+	opTokens, err := authSvc.GenerateTokens(&model.User{ID: "op-user", Username: "operator", Role: "operator"})
+	if err != nil {
+		t.Fatalf("generate operator tokens: %v", err)
+	}
+	return r, adminTokens.AccessToken, opTokens.AccessToken
 }
 
 func TestRouterIntegration(t *testing.T) {
-	r := newTestRouter(t)
+	r, _, opToken := newTestRouter(t)
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
@@ -235,6 +260,58 @@ func TestRouterIntegration(t *testing.T) {
 	// WebSocket endpoint returns upgrade failure without WS headers (still routed).
 	if resp, _ := get("/api/v1/ws"); resp.StatusCode == http.StatusNotFound {
 		t.Fatalf("ws route not found")
+	}
+
+	// User management: admin only.
+	if resp, body := do("GET", "/api/v1/users", "", bearer); resp.StatusCode != http.StatusOK {
+		t.Fatalf("admin list users: %d %s", resp.StatusCode, body)
+	}
+	if resp, _ := do("GET", "/api/v1/users", "", "Bearer "+opToken); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("operator list users should be 403, got %d", resp.StatusCode)
+	}
+	userBody := `{"username":"newbie","email":"newbie@example.com","role":"viewer","password":"newbiepass123"}`
+	if resp, _ := do("POST", "/api/v1/users", userBody, "Bearer "+opToken); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("operator create user should be 403, got %d", resp.StatusCode)
+	}
+	if resp, body := do("POST", "/api/v1/users", userBody, bearer); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("admin create user: %d %s", resp.StatusCode, body)
+	}
+	loginNew, loginNewBody := do("POST", "/api/v1/auth/login", `{"username":"newbie","password":"newbiepass123"}`, "")
+	if loginNew.StatusCode != http.StatusOK {
+		t.Fatalf("new user login: %d %s", loginNew.StatusCode, loginNewBody)
+	}
+
+	// Audit dashboard: admin only, and the earlier create is recorded.
+	if resp, _ := do("GET", "/api/v1/audit", "", "Bearer "+opToken); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("operator audit should be 403, got %d", resp.StatusCode)
+	}
+	auditOK := false
+	auditDeadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(auditDeadline) {
+		auditResp, auditBody := do("GET", "/api/v1/audit?page=1&page_size=50", "", bearer)
+		if auditResp.StatusCode != http.StatusOK {
+			t.Fatalf("admin audit: %d %s", auditResp.StatusCode, auditBody)
+		}
+		var audit struct {
+			Data []struct {
+				ResourceType string `json:"resource_type"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(auditBody), &audit); err == nil {
+			for _, e := range audit.Data {
+				if e.ResourceType == "forward_rule" {
+					auditOK = true
+					break
+				}
+			}
+		}
+		if auditOK {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !auditOK {
+		t.Fatal("audit log did not record the created forward rule")
 	}
 
 	// SPA fallback.

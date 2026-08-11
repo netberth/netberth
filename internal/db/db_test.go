@@ -5,6 +5,7 @@
 package db
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -157,5 +158,33 @@ func TestNewUUIDFormat(t *testing.T) {
 	}
 	if newUUID() == newUUID() {
 		t.Fatal("expected distinct UUIDs")
+	}
+}
+
+func TestEnsureColumn(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file:ensurecol?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+	db.Exec("CREATE TABLE users (id TEXT PRIMARY KEY)")
+
+	if err := ensureColumn(db, "users", "enabled", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+		t.Fatalf("ensureColumn add: %v", err)
+	}
+	if _, err := db.Exec("INSERT INTO users (id) VALUES ('u1')"); err != nil {
+		t.Fatalf("insert with default: %v", err)
+	}
+	var enabled int
+	if err := db.QueryRow("SELECT enabled FROM users WHERE id='u1'").Scan(&enabled); err != nil {
+		t.Fatalf("query enabled: %v", err)
+	}
+	if enabled != 1 {
+		t.Fatalf("expected enabled default 1, got %d", enabled)
+	}
+
+	// Second call must be a no-op.
+	if err := ensureColumn(db, "users", "enabled", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+		t.Fatalf("ensureColumn idempotent: %v", err)
 	}
 }

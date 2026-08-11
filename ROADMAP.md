@@ -30,6 +30,8 @@
 | retry | 95.1% (2026-08-11) | 50%+ ✅ |
 | db | 85.4% (2026-08-11) | 50%+ ✅ |
 | utils | 100.0% (2026-08-11) | 80% ✅ |
+| tlsutil | 73.5% (2026-08-11) | 50%+ ✅ |
+| config | 87.2% (2026-08-11) | 50%+ ✅ |
 
 ## Engineering Debt
 
@@ -44,8 +46,8 @@
 
 ## v1.1 Planned
 
-- [ ] TLS termination for admin panel
-- [ ] Multi-user management in UI
-- [ ] Audit log dashboard
+- [x] TLS termination for admin panel（NB_TLS_ENABLED，自动自签名或用户证书，TLS ≥ 1.2，2026-08-11）
+- [x] Multi-user management in UI（用户 CRUD/角色/禁用/重置密码，2026-08-11）
+- [x] Audit log dashboard（分页/过滤查询 API + 前端页面，2026-08-11）
 - [ ] PostgreSQL support (multi-replica)
 - [ ] P2P UDP hole punching with delta prediction

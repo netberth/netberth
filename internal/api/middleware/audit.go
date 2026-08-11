@@ -86,6 +86,7 @@ func extractAuditInfo(path, method string) (resourceType, resourceID, action str
 		"cron":          "cron_job",
 		"acme":          "acme_certificate",
 		"storage":       "storage_mount",
+		"users":         "user",
 	}
 
 	if t, ok := typeMap[parts[0]]; ok {

@@ -22,6 +22,7 @@ type User struct {
 	Email        string    `json:"email,omitempty"`
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`
+	Enabled      bool      `json:"enabled"`
 	OTPEnabled   bool      `json:"otp_enabled"`
 	OTPSecret    string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`

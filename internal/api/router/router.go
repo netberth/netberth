@@ -34,6 +34,8 @@ func New(db *sql.DB, authService *auth.Service, wire *service.Wire, hub *ws.Hub)
 	bus := wire.Bus()
 
 	authH := handler.NewAuthHandler(db, authService)
+	userH := handler.NewUserHandler(db, authService)
+	auditH := handler.NewAuditHandler(db)
 	forwardH := handler.NewForwardHandler(db)
 	proxyH := handler.NewProxyHandler(db)
 	ddnsH := handler.NewDDNSHandler(db)
@@ -91,6 +93,17 @@ func New(db *sql.DB, authService *auth.Service, wire *service.Wire, hub *ws.Hub)
 			registerCRUD(r, "/cron", cronH)
 			registerCRUD(r, "/acme", acmeH)
 			registerCRUD(r, "/storage", storageH)
+
+			// User management is admin-only.
+			r.Group(func(r chi.Router) {
+				r.Use(custommw.RequireRole("admin"))
+				r.Get("/audit", auditH.List)
+				r.Get("/users", userH.List)
+				r.Post("/users", userH.Create)
+				r.Put("/users/{id}", userH.Update)
+				r.Delete("/users/{id}", userH.Delete)
+				r.Post("/users/{id}/reset-password", userH.ResetPassword)
+			})
 		})
 	})
 

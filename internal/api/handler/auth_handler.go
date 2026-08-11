@@ -49,9 +49,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	var user model.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, password_hash, role, otp_enabled, otp_secret FROM users WHERE username = ?",
+		"SELECT id, username, email, password_hash, role, otp_enabled, otp_secret, enabled FROM users WHERE username = ?",
 		req.Username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.Role, &user.OTPEnabled, &user.OTPSecret)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.Role, &user.OTPEnabled, &user.OTPSecret, &user.Enabled)
 	if err == sql.ErrNoRows {
 		time.Sleep(200 * time.Millisecond) // mitigate timing attack
 		utils.Error(w, http.StatusUnauthorized, "invalid credentials")
@@ -64,6 +64,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	valid, err := h.auth.VerifyPassword(req.Password, user.PasswordHash)
 	if err != nil || !valid {
+		utils.Error(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	if !user.Enabled {
+		// Keep the response identical to a bad password so account state is
+		// not disclosed to unauthenticated callers.
 		utils.Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
@@ -173,6 +179,7 @@ func (h *AuthHandler) sanitizeUser(u *model.User) map[string]interface{} {
 		"username":    u.Username,
 		"email":       u.Email,
 		"role":        u.Role,
+		"enabled":     u.Enabled,
 		"otp_enabled": u.OTPEnabled,
 	}
 }
@@ -184,10 +191,16 @@ type otpSetupResponse struct {
 
 func (h *AuthHandler) Setup2FA(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(auth.ClaimsKey).(*auth.Claims)
-	if !ok { utils.Error(w, http.StatusUnauthorized, "unauthorized"); return }
+	if !ok {
+		utils.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	secret, err := h.auth.GenerateOTPSecret()
-	if err != nil { utils.Error(w, http.StatusInternalServerError, "generate failed"); return }
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "generate failed")
+		return
+	}
 
 	var username string
 	h.db.QueryRow("SELECT username FROM users WHERE id=?", claims.UserID).Scan(&username)
@@ -201,14 +214,25 @@ func (h *AuthHandler) Setup2FA(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Enable2FA(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(auth.ClaimsKey).(*auth.Claims)
-	if !ok { utils.Error(w, http.StatusUnauthorized, "unauthorized"); return }
+	if !ok {
+		utils.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
-	var body struct{ Code string `json:"code"` }
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil { utils.Error(w, http.StatusBadRequest, "invalid body"); return }
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid body")
+		return
+	}
 
 	var secret string
 	h.db.QueryRow("SELECT otp_secret FROM users WHERE id=?", claims.UserID).Scan(&secret)
-	if secret == "" { utils.Error(w, http.StatusBadRequest, "no OTP setup found — call /auth/2fa/setup first"); return }
+	if secret == "" {
+		utils.Error(w, http.StatusBadRequest, "no OTP setup found — call /auth/2fa/setup first")
+		return
+	}
 
 	if !h.auth.ValidateTOTP(secret, body.Code) {
 		utils.Error(w, http.StatusBadRequest, "invalid OTP code")
@@ -221,7 +245,10 @@ func (h *AuthHandler) Enable2FA(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Disable2FA(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(auth.ClaimsKey).(*auth.Claims)
-	if !ok { utils.Error(w, http.StatusUnauthorized, "unauthorized"); return }
+	if !ok {
+		utils.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	h.db.Exec("UPDATE users SET otp_enabled=0, otp_secret='' WHERE id=?", claims.UserID)
 	utils.Message(w, "2FA disabled")

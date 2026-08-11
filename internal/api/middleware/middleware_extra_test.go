@@ -157,6 +157,8 @@ func TestExtractAuditInfo(t *testing.T) {
 		{"/api/v1/cron", "POST", "cron_job", "", "created"},
 		{"/api/v1/acme", "POST", "acme_certificate", "", "created"},
 		{"/api/v1/storage", "POST", "storage_mount", "", "created"},
+		{"/api/v1/users", "POST", "user", "", "created"},
+		{"/api/v1/users/abc", "DELETE", "user", "abc", "deleted"},
 		{"/api/v1/forward-rules", "GET", "", "", ""},
 		{"/api/v1/unknown", "POST", "", "", ""},
 		{"/not-api", "POST", "", "", ""},

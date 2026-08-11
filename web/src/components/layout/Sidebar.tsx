@@ -2,8 +2,9 @@ import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, ArrowLeftRight, Globe, RefreshCw, Network,
-  Power, Clock, Shield, HardDrive, Settings, Anchor
+  Power, Clock, Shield, HardDrive, Settings, Users as UsersIcon, ScrollText, Anchor
 } from 'lucide-react'
+import { useAuth } from '@/stores/auth'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -15,10 +16,15 @@ const navItems = [
   { to: '/cron', icon: Clock, label: 'Cron Jobs' },
   { to: '/acme', icon: Shield, label: 'Certificates' },
   { to: '/storage', icon: HardDrive, label: 'Storage' },
+  { to: '/users', icon: UsersIcon, label: 'Users' },
+  { to: '/audit', icon: ScrollText, label: 'Audit Log' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
 export function Sidebar() {
+  const { user } = useAuth()
+  const adminOnly = ['/users', '/audit']
+  const items = user?.role === 'admin' ? navItems : navItems.filter(i => !adminOnly.includes(i.to))
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-56 border-r border-border bg-card">
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
@@ -26,7 +32,7 @@ export function Sidebar() {
         <span className="text-lg font-bold tracking-tight">NetBerth</span>
       </div>
       <nav className="space-y-1 p-3">
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {items.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}

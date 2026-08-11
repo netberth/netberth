@@ -14,13 +14,12 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/netberth/netberth/internal/auth"
 	"github.com/netberth/netberth/internal/model"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 func sqlOpen(dsn string) (*sql.DB, error) { return sql.Open("sqlite3", dsn) }
-
 
 func TestLoginHandlerValidCredentials(t *testing.T) {
 	h, db := setupAuthHandler(t)
@@ -114,10 +113,14 @@ func TestMeHandler(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.Me(w, req)
 
-	if w.Code != http.StatusOK { t.Fatalf("expected 200, got %d", w.Code) }
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
 	var resp map[string]interface{}
 	json.NewDecoder(w.Body).Decode(&resp)
-	if resp["success"] != true { t.Fatal("expected success") }
+	if resp["success"] != true {
+		t.Fatal("expected success")
+	}
 }
 
 func TestSystemStatusHandler(t *testing.T) {
@@ -129,7 +132,9 @@ func TestSystemStatusHandler(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.Status(w, req)
 
-	if w.Code != http.StatusOK { t.Fatalf("expected 200, got %d", w.Code) }
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
 	var resp map[string]interface{}
 	json.NewDecoder(w.Body).Decode(&resp)
 	v := resp["data"].(map[string]interface{})["version"]
@@ -151,13 +156,17 @@ func TestForwardCRUD(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	h.Create(w, req)
-	if w.Code != http.StatusCreated { t.Fatalf("create: %d", w.Code) }
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: %d", w.Code)
+	}
 
 	// List
 	req2 := httptest.NewRequest("GET", "/api/v1/forward-rules", nil)
 	w2 := httptest.NewRecorder()
 	h.List(w2, req2)
-	if w2.Code != http.StatusOK { t.Fatalf("list: %d", w2.Code) }
+	if w2.Code != http.StatusOK {
+		t.Fatalf("list: %d", w2.Code)
+	}
 }
 
 // Helpers
@@ -165,14 +174,16 @@ func TestForwardCRUD(t *testing.T) {
 func setupAuthHandler(t *testing.T) (*AuthHandler, *sql.DB) {
 	t.Helper()
 	db, err := sqlOpen(":memory:")
-	if err != nil { t.Fatalf("open db: %v", err) }
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
 	runTestMigrations(db)
 	h := NewAuthHandler(db, auth.NewService("test-secret", 15*time.Minute, 7*24*time.Hour))
 	return h, db
 }
 
 func runTestMigrations(db *sql.DB) {
-	db.Exec(`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, tenant_id TEXT DEFAULT '', username TEXT UNIQUE, email TEXT DEFAULT '', password_hash TEXT, role TEXT DEFAULT 'admin', otp_enabled INTEGER DEFAULT 0, otp_secret TEXT DEFAULT '', password_changed INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, tenant_id TEXT DEFAULT '', username TEXT UNIQUE, email TEXT DEFAULT '', password_hash TEXT, role TEXT DEFAULT 'admin', enabled INTEGER DEFAULT 1, otp_enabled INTEGER DEFAULT 0, otp_secret TEXT DEFAULT '', password_changed INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`)
 	db.Exec(`CREATE TABLE IF NOT EXISTS forward_rules (id TEXT PRIMARY KEY, tenant_id TEXT DEFAULT '', owner_id TEXT DEFAULT '', name TEXT, protocol TEXT DEFAULT 'tcp', listen_addr TEXT DEFAULT '', listen_port INTEGER, target_addr TEXT, target_port INTEGER, enable_ipv6 INTEGER DEFAULT 1, max_conns INTEGER DEFAULT 0, enabled INTEGER DEFAULT 0, schedule_on TEXT DEFAULT '', schedule_off TEXT DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`)
 	db.Exec(`CREATE TABLE IF NOT EXISTS forward_whitelist (id TEXT PRIMARY KEY, rule_id TEXT, value TEXT)`)
 	db.Exec(`CREATE TABLE IF NOT EXISTS forward_blacklist (id TEXT PRIMARY KEY, rule_id TEXT, value TEXT)`)

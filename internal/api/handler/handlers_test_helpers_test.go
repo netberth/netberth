@@ -29,6 +29,7 @@ func setupFullTestDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { db.Close() })
 
 	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, tenant_id TEXT DEFAULT '', username TEXT UNIQUE, email TEXT DEFAULT '', password_hash TEXT, role TEXT DEFAULT 'admin', enabled INTEGER DEFAULT 1, otp_enabled INTEGER DEFAULT 0, otp_secret TEXT DEFAULT '', password_changed INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS forward_rules (id TEXT PRIMARY KEY, tenant_id TEXT, owner_id TEXT, name TEXT, protocol TEXT, listen_addr TEXT, listen_port INTEGER, target_addr TEXT, target_port INTEGER, enable_ipv6 INTEGER, max_conns INTEGER, enabled INTEGER, schedule_on TEXT DEFAULT '', schedule_off TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE IF NOT EXISTS forward_whitelist (id TEXT PRIMARY KEY, rule_id TEXT, value TEXT)`,
 		`CREATE TABLE IF NOT EXISTS forward_blacklist (id TEXT PRIMARY KEY, rule_id TEXT, value TEXT)`,
@@ -45,6 +46,7 @@ func setupFullTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE IF NOT EXISTS acme_certificates (id TEXT PRIMARY KEY, tenant_id TEXT, name TEXT, domains TEXT, provider TEXT, dns_provider TEXT, dns_config TEXT, email TEXT, auto_renew INTEGER, renew_days INTEGER, cert_path TEXT DEFAULT '', key_path TEXT DEFAULT '', expires_at DATETIME, status TEXT DEFAULT 'pending', error TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE IF NOT EXISTS storage_mounts (id TEXT PRIMARY KEY, tenant_id TEXT, name TEXT, type TEXT, source TEXT, username TEXT DEFAULT '', password TEXT DEFAULT '', services TEXT DEFAULT '[]', ftp_port INTEGER DEFAULT 2121, enabled INTEGER DEFAULT 0, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`,
+		`CREATE TABLE IF NOT EXISTS audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant_id TEXT DEFAULT '', user_id TEXT DEFAULT '', username TEXT DEFAULT '', action TEXT DEFAULT '', resource_type TEXT DEFAULT '', resource_id TEXT DEFAULT '', changes TEXT DEFAULT '', remote_addr TEXT DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

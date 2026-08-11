@@ -7,6 +7,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -24,6 +25,9 @@ type ServerConfig struct {
 	Port         int           `yaml:"port" env:"NB_SERVER_PORT"`
 	ReadTimeout  time.Duration `yaml:"read_timeout"`
 	WriteTimeout time.Duration `yaml:"write_timeout"`
+	TLSEnabled   bool          `yaml:"tls_enabled" env:"NB_TLS_ENABLED"`
+	TLSCert      string        `yaml:"tls_cert" env:"NB_TLS_CERT"`
+	TLSKey       string        `yaml:"tls_key" env:"NB_TLS_KEY"`
 }
 
 type DatabaseConfig struct {
@@ -49,6 +53,7 @@ func Default() *Config {
 			Port:         8443,
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
+			TLSEnabled:   false,
 		},
 		Database: DatabaseConfig{
 			Path: "./data/netberth.db",
@@ -113,5 +118,23 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("NB_LOG_LEVEL"); v != "" {
 		c.Log.Level = v
+	}
+	if v := os.Getenv("NB_TLS_ENABLED"); v != "" {
+		c.Server.TLSEnabled = parseBool(v)
+	}
+	if v := os.Getenv("NB_TLS_CERT"); v != "" {
+		c.Server.TLSCert = v
+	}
+	if v := os.Getenv("NB_TLS_KEY"); v != "" {
+		c.Server.TLSKey = v
+	}
+}
+
+func parseBool(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }

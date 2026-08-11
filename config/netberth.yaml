@@ -4,6 +4,9 @@ server:
   port: 8443
   read_timeout: 30s
   write_timeout: 30s
+  tls_enabled: false # NB_TLS_ENABLED — serve the admin panel over HTTPS
+  tls_cert: ""       # NB_TLS_CERT — optional PEM cert path
+  tls_key: ""        # NB_TLS_KEY — optional PEM key path
 
 database:
   path: ./data/netberth.db

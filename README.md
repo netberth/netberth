@@ -20,7 +20,7 @@ docker compose up -d
 make build && make run
 ```
 
-**Admin panel**: `http://localhost:8443`  
+**Admin panel**: `http://localhost:8443` (or `https://localhost:8443` with `NB_TLS_ENABLED=true`)  
 **Default credentials**: printed to `docker compose logs` on first run. Change immediately.
 
 ## Features
@@ -35,6 +35,7 @@ make build && make run
 | **Cron Scheduler** | Visual cron editor, shell commands, module toggle actions |
 | **ACME Certificates** | Self-signed with ECDSA P-256. Auto-renew with configurable threshold |
 | **Network Storage** | Local/WebDAV mount. FileBrowser, WebDAV, FTP service endpoints |
+| **User Management** | Multi-user accounts, admin/operator/viewer roles, enable/disable, password reset |
 
 ## Architecture
 
@@ -69,6 +70,7 @@ netberth/
 - **2FA ready**: TOTP data model and generation
 - **First-run password**: Randomly generated, printed to logs
 - **No default credentials** in production
+- **Optional TLS**: admin panel HTTPS with auto-generated self-signed cert, or user-provided cert/key
 
 ## API
 
@@ -91,6 +93,9 @@ All endpoints at `/api/v1/`. Authentication via `Bearer <token>` header.
 | CRUD | `/cron` | Cron jobs |
 | CRUD | `/acme` | SSL certificates |
 | CRUD | `/storage` | Storage mounts |
+| CRUD | `/users` | User management (admin only) |
+| POST | `/users/{id}/reset-password` | Reset a user password (admin only) |
+| GET | `/audit` | Paginated audit trail with filters (admin only) |
 
 ## Configuration
 
@@ -104,6 +109,9 @@ Environment variables override `config/netberth.yaml`:
 | `NB_DB_PATH` | `./data/netberth.db` | SQLite database path |
 | `NB_LOG_LEVEL` | `info` | debug/info/warn/error |
 | `NB_CONFIG_PATH` | `config/netberth.yaml` | Config file path |
+| `NB_TLS_ENABLED` | `false` | Serve the admin panel over HTTPS (TLS 1.2+) |
+| `NB_TLS_CERT` | auto self-signed | PEM certificate path (must be paired with NB_TLS_KEY) |
+| `NB_TLS_KEY` | auto self-signed | PEM private key path (must be paired with NB_TLS_CERT) |
 
 ## License
 
