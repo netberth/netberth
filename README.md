@@ -21,6 +21,7 @@ make build && make run
 ```
 
 **Admin panel**: `http://localhost:8443` (or `https://localhost:8443` with `NB_TLS_ENABLED=true`)  
+> Note: Docker Hub image publishing is pending (requires registry secrets); `docker compose` builds from source.  
 **Default credentials**: printed to `docker compose logs` on first run. Change immediately.
 
 ## Features

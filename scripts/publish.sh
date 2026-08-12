@@ -1,5 +1,7 @@
 #!/bin/bash
 # NetBerth Docker Hub publish script
+# Requires: DOCKER_USERNAME/DOCKER_PASSWORD secrets, Docker Hub org "netberth",
+# and a successful manual CI publish run. The image is NOT published yet.
 set -e
 
 VERSION="${1:-$(date +%Y.%m.%d)}"

@@ -18,8 +18,8 @@ var docs = map[string]interface{}{
 		{
 			"title":       "Quick Start",
 			"description": "Deploy NetBerth in 30 seconds",
-			"content": `1. Docker: docker run -d --name netberth --network host -v netberth-data:/app/data -e NB_JWT_SECRET=$(openssl rand -base64 48) netberth/netberth:latest
-2. Open http://YOUR_IP:8443
+			"content": `1. Docker (build from source): git clone https://github.com/netberth/netberth && cd netberth && docker compose up -d --build
+2. Open http://YOUR_IP:8443 (or https:// with NB_TLS_ENABLED=true)
 3. Login with admin / password from docker logs
 4. Change password immediately in Settings`,
 		},
@@ -101,10 +101,9 @@ Interval: seconds between updates (min 60). Record type: A for IPv4, AAAA for IP
 			"title":       "Upgrading",
 			"description": "How to upgrade NetBerth",
 			"content": `1. Backup: Settings > click "Download Backup" (or use API /system/backup)
-2. Stop: docker stop netberth && docker rm netberth
-3. Pull new image: docker pull netberth/netberth:latest
-4. Start: docker run ... (same command, data volume preserved)
-5. Verify: check logs for errors, login
+2. Update source: git pull
+3. Rebuild and start: docker compose up -d --build
+4. Verify: check logs for errors, login
 Data in /app/data persists across upgrades. DB migrations run automatically.`,
 		},
 		{
