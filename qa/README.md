@@ -12,7 +12,7 @@
 | `smoke/` | curl + python | 正常使用全旅程：登录/刷新/吊销、仪表盘、用户/转发/代理 CRUD、Webhook 端到端投递、WS、登出（22 项） |
 | `stress/` | ab + python + shell | 连接洪泛、并发 CRUD、refresh 竞态、WS 洪泛、慢消费者背压、fd=256 极限、goroutine/RSS 增长观测 |
 | `sim/` | shell + python + ab | 模拟部署形态：TLS 面板+HSTS、真实反代上游、规则重启持久化、资源受限主机、doctor、多实例共存 |
-| `e2e/` | Playwright | 真实 Chromium：登录、页面导航、深链刷新、规则/用户 CRUD（18 项） |
+| `e2e/` | Playwright | 真实 Chromium：登录、页面导航、深链刷新、规则/用户 CRUD、Webhook 页面（20 项） |
 | `soak/` | k6 | 长时间混合负载（默认 10 分钟，`NB_QA_SOAK_SECONDS` 可调）：斜坡/平台/尖峰/排空 + 常驻 WS |
 
 ## 用法
@@ -58,7 +58,7 @@ NB_QA_BASE=http://127.0.0.1:18446 NB_QA_PASS="$NB_QA_PASS" \
 | security | 44/44 PASS，0 WARN |
 | chaos | 14/14 PASS |
 | k6 load | 56,709 checks 100%、56,670 请求、0 失败、WS 40/40、p95≈42ms |
-| e2e | 18/18 PASS（真实 Chromium） |
+| e2e | 20/20 PASS（真实 Chromium） |
 | boundary | 26/26 PASS（含 slowloris 5.0s 切断、431、CL+TE 拒绝） |
 | smoke | 22/22 PASS |
 | stress | 15/15 PASS（3k 洪水 0 连接错误、fd=256 存活恢复、goroutine/RSS 无增长） |
