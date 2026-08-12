@@ -46,6 +46,7 @@ func setupFullTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE IF NOT EXISTS acme_certificates (id TEXT PRIMARY KEY, tenant_id TEXT, name TEXT, domains TEXT, provider TEXT, dns_provider TEXT, dns_config TEXT, email TEXT, auto_renew INTEGER, renew_days INTEGER, cert_path TEXT DEFAULT '', key_path TEXT DEFAULT '', expires_at DATETIME, status TEXT DEFAULT 'pending', error TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE IF NOT EXISTS storage_mounts (id TEXT PRIMARY KEY, tenant_id TEXT, name TEXT, type TEXT, source TEXT, username TEXT DEFAULT '', password TEXT DEFAULT '', services TEXT DEFAULT '[]', ftp_port INTEGER DEFAULT 2121, enabled INTEGER DEFAULT 0, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`,
+		`CREATE TABLE IF NOT EXISTS refresh_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at DATETIME NOT NULL, revoked_at DATETIME, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant_id TEXT DEFAULT '', user_id TEXT DEFAULT '', username TEXT DEFAULT '', action TEXT DEFAULT '', resource_type TEXT DEFAULT '', resource_id TEXT DEFAULT '', changes TEXT DEFAULT '', remote_addr TEXT DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 	}
 	for _, s := range stmts {

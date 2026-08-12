@@ -21,6 +21,7 @@ make build && make run
 ```
 
 **Admin panel**: `http://localhost:8443` (or `https://localhost:8443` with `NB_TLS_ENABLED=true`)  
+**Pre-flight check**: `./netberth doctor` validates config, database integrity, TLS material and port availability.  
 > Note: Docker Hub image publishing is pending (requires registry secrets); `docker compose` builds from source.  
 **Default credentials**: printed to `docker compose logs` on first run. Change immediately.
 
@@ -88,6 +89,7 @@ All endpoints at `/api/v1/`. Authentication via `Bearer <token>` header.
 | POST | `/auth/change-password` | Change password |
 | GET | `/ws` | WebSocket real-time status |
 | GET | `/system/status` | Server health + runtime info |
+| GET | `/system/metrics` | Machine-readable runtime + module metrics |
 | CRUD | `/forward-rules` | Port forwarding rules |
 | CRUD | `/proxy-rules` | Reverse proxy rules |
 | CRUD | `/ddns` | DDNS configurations |

@@ -75,5 +75,4 @@
 - **真实库验证 ✅（2026-08-11）**：临时 postgres:16-alpine 容器 + 独立库，
   `NB_TEST_POSTGRES_DSN` 集成测试通过（连接/`?` 重写/迁移/SeedAdminUser），
   建出 19 张表与 SQLite 对照一致；容器已清理。
-- **待办**：完成 v1.1.0 发布流程（tag/zig 构建/strings 检查/sha256/Draft Release），
-  并把 PostgreSQL 与 CI Go 1.25 变更同步到公开仓库。
+- **待办**：v1.2.0 发布草稿审阅；Docker Hub 镜像正式发布（需配置 secrets，人工操作）。

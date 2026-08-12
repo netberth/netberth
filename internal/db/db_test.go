@@ -41,7 +41,7 @@ func TestOpenCreatesSchema(t *testing.T) {
 		"proxy_rules", "proxy_domains", "proxy_ip_whitelist", "proxy_ip_blacklist",
 		"proxy_ua_whitelist", "proxy_ua_blacklist", "ddns_configs", "stun_tunnels",
 		"wol_devices", "cron_jobs", "acme_certificates", "storage_mounts",
-		"settings", "audit_events",
+		"settings", "audit_events", "schema_migrations", "refresh_tokens",
 	}
 	for _, table := range want {
 		if !got[table] {
@@ -219,5 +219,79 @@ func TestOpenDatabasePostgresBadDSN(t *testing.T) {
 			db.Close()
 		}
 		t.Fatal("expected error for unreachable postgres")
+	}
+}
+
+func TestSchemaVersionRecordedAndStable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "netberth.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("first open: %v", err)
+	}
+	var v int
+	if err := db.QueryRow("SELECT MAX(version) FROM schema_migrations").Scan(&v); err != nil {
+		t.Fatalf("query version: %v", err)
+	}
+	if v != SchemaVersion {
+		t.Fatalf("expected schema version %d, got %d", SchemaVersion, v)
+	}
+	db.Close()
+
+	backup := path + ".pre-upgrade.bak"
+	if _, err := os.Stat(backup); err == nil {
+		os.Remove(backup)
+	}
+
+	// Reopen with the same version must NOT create another backup.
+	db2, err := Open(path)
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	db2.Close()
+	if _, err := os.Stat(backup); !os.IsNotExist(err) {
+		t.Fatalf("unexpected backup file created on same-version reopen: %v", err)
+	}
+}
+
+func TestPreMigrationBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "netberth.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	// Simulate an old database at schema version 1.
+	if _, err := db.Exec("DELETE FROM schema_migrations"); err != nil {
+		t.Fatalf("clear versions: %v", err)
+	}
+	if _, err := db.Exec("INSERT INTO schema_migrations (version) VALUES (1)"); err != nil {
+		t.Fatalf("insert old version: %v", err)
+	}
+	db.Close()
+
+	db2, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	db2.Close()
+
+	backup := path + ".pre-upgrade.bak"
+	info, err := os.Stat(backup)
+	if err != nil {
+		t.Fatalf("expected pre-upgrade backup: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Fatal("backup file is empty")
+	}
+
+	var v int
+	sql.Open("sqlite3", path)
+	raw, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	defer raw.Close()
+	raw.QueryRow("SELECT MAX(version) FROM schema_migrations").Scan(&v)
+	if v != SchemaVersion {
+		t.Fatalf("expected version %d after reopen, got %d", SchemaVersion, v)
 	}
 }

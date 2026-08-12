@@ -5,7 +5,7 @@ RUN npm install
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.25-alpine AS go-builder
+FROM golang:1.26-alpine AS go-builder
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 WORKDIR /src
 COPY . .

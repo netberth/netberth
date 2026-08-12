@@ -75,8 +75,28 @@ func openSQLite(path string) (*sql.DB, error) {
 		}
 	}
 
+	if err := ensureSchemaMigrations(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("ensure schema_migrations: %w", err)
+	}
+	cur, err := currentSchemaVersion(db)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("read schema version: %w", err)
+	}
+	if cur < SchemaVersion && isFileBasedSQLite(path) {
+		if err := backupSQLiteBeforeUpgrade(path); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("pre-migration backup: %w", err)
+		}
+	}
 	if err := runMigrations(db); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("run migrations: %w", err)
+	}
+	if err := recordSchemaVersion(db, SchemaVersion); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("record schema version: %w", err)
 	}
 	return db, nil
 }
@@ -130,9 +150,21 @@ func openPostgres(dsn string) (*sql.DB, error) {
 		database.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
+	if err := ensureSchemaMigrations(database); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("ensure schema_migrations: %w", err)
+	}
+	if _, err := currentSchemaVersion(database); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("read schema version: %w", err)
+	}
 	if err := runPostgresMigrations(database); err != nil {
 		database.Close()
 		return nil, fmt.Errorf("postgres migrations: %w", err)
+	}
+	if err := recordSchemaVersion(database, SchemaVersion); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("record schema version: %w", err)
 	}
 	return database, nil
 }

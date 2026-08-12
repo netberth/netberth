@@ -50,7 +50,14 @@
 - [x] Multi-user management in UI（用户 CRUD/角色/禁用/重置密码，2026-08-11）
 - [x] Audit log dashboard（分页/过滤查询 API + 前端页面，2026-08-11）
 - [x] PostgreSQL support (multi-replica) — M1-M3 完成（docs/postgresql-support.md）；真实库集成验证由 `NB_TEST_POSTGRES_DSN` 门控
-## v1.2 Planned
+## v1.2 — Stability & Usability（代码完成，Release 草稿待审）
+
+- [x] M1 可靠性地基：迁移版本化（schema_migrations）+ SQLite 迁移前备份、refresh token 吊销/轮换/登出/改密吊销
+- [x] M2 用户第一公里：`netberth doctor` 自检命令、首次运行体验
+- [x] M3 可观测性：`/api/v1/system/metrics` 接口（运行时/模块计数/forward 状态/存储挂载）
+- [x] M4 安全与发布：TLS 下 HSTS、CI govulncheck/npm audit、Go 1.26、依赖安全升级、版本 1.2.0
+
+## v1.3 Planned（待用户反馈后再排）
 
 - [ ] P2P UDP hole punching with delta prediction
 - [ ] Admin panel i18n (中文/English)

@@ -47,6 +47,11 @@ func TestRefreshTokenHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate tokens: %v", err)
 	}
+	rc, err := authSvc.ValidateToken(tokens.RefreshToken)
+	if err != nil {
+		t.Fatalf("validate refresh: %v", err)
+	}
+	h.storeRefreshToken(rc, tokens.RefreshToken)
 
 	body, _ := json.Marshal(map[string]string{"refresh_token": tokens.RefreshToken})
 	w := doJSON(t, h.RefreshToken, http.MethodPost, "/api/v1/auth/refresh", body)
@@ -218,4 +223,88 @@ func testTOTP(t *testing.T, secret string) string {
 	offset := hash[len(hash)-1] & 0x0f
 	b := int32(hash[offset]&0x7f)<<24 | int32(hash[offset+1])<<16 | int32(hash[offset+2])<<8 | int32(hash[offset+3])
 	return fmt.Sprintf("%06d", int(b)%1000000)
+}
+
+func TestRefreshRotationAndLogout(t *testing.T) {
+	h, db := setupAuthHandler(t)
+	defer db.Close()
+
+	authSvc := auth.NewService("test-secret", 15*time.Minute, 7*24*time.Hour)
+	hash, _ := authSvc.HashPassword("testpass123")
+	db.Exec("INSERT INTO users (id, tenant_id, username, password_hash, role, password_changed) VALUES (?,?,?,?,?,?)",
+		"user-rot", "", "rotuser", hash, "admin", 1)
+	h.auth = authSvc
+
+	loginBody, _ := json.Marshal(loginRequest{Username: "rotuser", Password: "testpass123"})
+	lw := doJSON(t, h.Login, http.MethodPost, "/api/v1/auth/login", loginBody)
+	expectStatus(t, lw, http.StatusOK)
+	var login struct {
+		Data struct {
+			Tokens auth.TokenPair `json:"tokens"`
+		} `json:"data"`
+	}
+	decodeResponse(t, lw, &login)
+	first := login.Data.Tokens.RefreshToken
+
+	// Refresh rotates the token.
+	refreshBody, _ := json.Marshal(map[string]string{"refresh_token": first})
+	rw := doJSON(t, h.RefreshToken, http.MethodPost, "/api/v1/auth/refresh", refreshBody)
+	expectStatus(t, rw, http.StatusOK)
+	var refreshed struct {
+		Data auth.TokenPair `json:"data"`
+	}
+	decodeResponse(t, rw, &refreshed)
+	second := refreshed.Data.RefreshToken
+	if second == "" || second == first {
+		t.Fatal("expected a rotated refresh token")
+	}
+
+	// The old token is now revoked.
+	wOld := doJSON(t, h.RefreshToken, http.MethodPost, "/api/v1/auth/refresh", refreshBody)
+	expectStatus(t, wOld, http.StatusUnauthorized)
+
+	// Logout revokes the current token.
+	logoutBody, _ := json.Marshal(map[string]string{"refresh_token": second})
+	lw2 := doJSON(t, h.Logout, http.MethodPost, "/api/v1/auth/logout", logoutBody)
+	expectStatus(t, lw2, http.StatusOK)
+
+	wRevoked := doJSON(t, h.RefreshToken, http.MethodPost, "/api/v1/auth/refresh", logoutBody)
+	expectStatus(t, wRevoked, http.StatusUnauthorized)
+
+	// Logout is idempotent and rejects missing body.
+	bad := doJSON(t, h.Logout, http.MethodPost, "/api/v1/auth/logout", []byte(`{}`))
+	expectStatus(t, bad, http.StatusBadRequest)
+}
+
+func TestChangePasswordRevokesRefreshTokens(t *testing.T) {
+	h, db := setupAuthHandler(t)
+	defer db.Close()
+
+	authSvc := auth.NewService("test-secret", 15*time.Minute, 7*24*time.Hour)
+	hash, _ := authSvc.HashPassword("oldpass123")
+	db.Exec("INSERT INTO users (id, tenant_id, username, password_hash, role, password_changed) VALUES (?,?,?,?,?,?)",
+		"user-pw", "", "pwuser2", hash, "admin", 1)
+	h.auth = authSvc
+
+	loginBody, _ := json.Marshal(loginRequest{Username: "pwuser2", Password: "oldpass123"})
+	lw := doJSON(t, h.Login, http.MethodPost, "/api/v1/auth/login", loginBody)
+	expectStatus(t, lw, http.StatusOK)
+	var login struct {
+		Data struct {
+			Tokens auth.TokenPair `json:"tokens"`
+		} `json:"data"`
+	}
+	decodeResponse(t, lw, &login)
+
+	claims := &auth.Claims{UserID: "user-pw", Username: "pwuser2", Role: "admin"}
+	req := httptest.NewRequest("POST", "/api/v1/auth/change-password",
+		bytes.NewReader([]byte(`{"old_password":"oldpass123","new_password":"NewPass123!"}`)))
+	req = req.WithContext(contextWithClaims(req.Context(), claims))
+	cw := httptest.NewRecorder()
+	h.ChangePassword(cw, req)
+	expectStatus(t, cw, http.StatusOK)
+
+	refreshBody, _ := json.Marshal(map[string]string{"refresh_token": login.Data.Tokens.RefreshToken})
+	w := doJSON(t, h.RefreshToken, http.MethodPost, "/api/v1/auth/refresh", refreshBody)
+	expectStatus(t, w, http.StatusUnauthorized)
 }

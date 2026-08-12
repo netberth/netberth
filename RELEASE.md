@@ -2,14 +2,16 @@
 
 ## Current Release
 
-**v1.1.0** (2026-08-12) — [GitHub Release](https://github.com/netberth/netberth/releases/tag/v1.1.0)
+**v1.2.0** (2026-08-12, draft pending review) — Stability & Usability
 
-- TLS termination for admin panel (`NB_TLS_ENABLED`, auto self-signed or user certs, TLS ≥ 1.2)
-- Multi-user management (CRUD, roles, enable/disable, password reset, last-admin protection)
-- Audit log dashboard (paginated/filtered API + admin UI)
-- PostgreSQL support (`NB_DB_DRIVER=postgres` + `NB_DB_DSN`)
-- Quality & security: full test coverage, SafePath hardening, deterministic FTP/WebDAV tests,
-  explicit SQL error handling, config env-override fix for Docker deployments
+- `netberth doctor`: pre-flight self check (config, database integrity, TLS, state dir, ports)
+- Refresh token revocation: logout, rotation, and full revocation on password change
+- Schema versioning with automatic pre-migration backup (`.pre-upgrade.bak`)
+- `/api/v1/system/metrics`: runtime, module counts, forward status, storage mounts
+- HSTS over TLS; `govulncheck` + `npm audit` in CI; Go 1.26 toolchain
+- Dependency security upgrades: chi v5.3.0, pgx v5.9.2, jwt v5.2.2, react-router-dom v7
+
+Previous release: **v1.1.0** — TLS panel, multi-user management, audit dashboard, PostgreSQL
 
 ## Building a Release
 

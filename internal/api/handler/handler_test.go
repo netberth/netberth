@@ -185,6 +185,7 @@ func setupAuthHandler(t *testing.T) (*AuthHandler, *sql.DB) {
 
 func runTestMigrations(db *sql.DB) {
 	db.Exec(`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, tenant_id TEXT DEFAULT '', username TEXT UNIQUE, email TEXT DEFAULT '', password_hash TEXT, role TEXT DEFAULT 'admin', enabled INTEGER DEFAULT 1, otp_enabled INTEGER DEFAULT 0, otp_secret TEXT DEFAULT '', password_changed INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS refresh_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at DATETIME NOT NULL, revoked_at DATETIME, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`)
 	db.Exec(`CREATE TABLE IF NOT EXISTS forward_rules (id TEXT PRIMARY KEY, tenant_id TEXT DEFAULT '', owner_id TEXT DEFAULT '', name TEXT, protocol TEXT DEFAULT 'tcp', listen_addr TEXT DEFAULT '', listen_port INTEGER, target_addr TEXT, target_port INTEGER, enable_ipv6 INTEGER DEFAULT 1, max_conns INTEGER DEFAULT 0, enabled INTEGER DEFAULT 0, schedule_on TEXT DEFAULT '', schedule_off TEXT DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`)
 	db.Exec(`CREATE TABLE IF NOT EXISTS forward_whitelist (id TEXT PRIMARY KEY, rule_id TEXT, value TEXT)`)
 	db.Exec(`CREATE TABLE IF NOT EXISTS forward_blacklist (id TEXT PRIMARY KEY, rule_id TEXT, value TEXT)`)

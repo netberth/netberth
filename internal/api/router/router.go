@@ -57,6 +57,7 @@ func New(db *sql.DB, authService *auth.Service, wire *service.Wire, hub *ws.Hub)
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public endpoints — no auth required
 		r.Get("/system/status", handler.NewSystemHandler(db).Status)
+		r.Get("/system/metrics", handler.NewMetricsHandler(db, wire.Forward).Metrics)
 		r.Post("/auth/login", authH.Login)
 		r.Get("/docs", handler.DocsHandler())
 		r.Post("/auth/refresh", authH.RefreshToken)
@@ -78,6 +79,7 @@ func New(db *sql.DB, authService *auth.Service, wire *service.Wire, hub *ws.Hub)
 
 			r.Get("/auth/me", authH.Me)
 			r.Post("/auth/change-password", authH.ChangePassword)
+			r.Post("/auth/logout", authH.Logout)
 
 			r.Get("/system/dashboard", handler.NewSystemHandler(db).Dashboard)
 

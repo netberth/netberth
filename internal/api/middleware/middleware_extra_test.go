@@ -6,6 +6,7 @@ package middleware
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -112,6 +113,20 @@ func TestSecurityHeaders(t *testing.T) {
 		if w.Header().Get(h) == "" {
 			t.Fatalf("missing security header %s", h)
 		}
+	}
+	if w.Header().Get("Strict-Transport-Security") != "" {
+		t.Fatal("HSTS must not be set over plain HTTP")
+	}
+}
+
+func TestSecurityHeadersHSTSOverTLS(t *testing.T) {
+	handler := SecurityHeaders(okHandler())
+	req := httptest.NewRequest("GET", "/", nil)
+	req.TLS = &tls.ConnectionState{Version: tls.VersionTLS12}
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if got := w.Header().Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains" {
+		t.Fatalf("unexpected HSTS header: %q", got)
 	}
 }
 

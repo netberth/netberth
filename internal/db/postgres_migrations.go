@@ -214,6 +214,14 @@ func postgresMigrations() []string {
 			value TEXT NOT NULL,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS refresh_tokens (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			token_hash TEXT NOT NULL UNIQUE,
+			expires_at TIMESTAMP NOT NULL,
+			revoked_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE IF NOT EXISTS audit_events (
 			id BIGSERIAL PRIMARY KEY,
 			tenant_id TEXT NOT NULL DEFAULT '',

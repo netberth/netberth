@@ -10,7 +10,8 @@ We aim to acknowledge reports within 48 hours and release fixes within 7 days.
 
 | Version | Status |
 |---------|--------|
-| 1.1.0 | Active |
+| 1.2.0 | Active |
+| 1.1.0 | Previous |
 | 1.0.0-rc1 | EOL |
 
 ## Security Architecture

@@ -6,7 +6,9 @@ package handler
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -79,6 +81,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	if rc, err := h.auth.ValidateToken(tokens.RefreshToken); err == nil {
+		h.storeRefreshToken(rc, tokens.RefreshToken)
+	}
 	utils.Success(w, map[string]interface{}{
 		"tokens": tokens,
 		"user":   h.sanitizeUser(&user),
@@ -94,7 +99,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	claims, err := h.auth.ValidateToken(body.RefreshToken)
-	if err != nil {
+	if err != nil || h.refreshTokenRevoked(claims.ID) {
 		utils.Error(w, http.StatusUnauthorized, "invalid refresh token")
 		return
 	}
@@ -111,6 +116,10 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	h.revokeRefreshToken(claims.ID)
+	if nc, err := h.auth.ValidateToken(tokens.RefreshToken); err == nil {
+		h.storeRefreshToken(nc, tokens.RefreshToken)
 	}
 	utils.Success(w, tokens)
 }
@@ -170,6 +179,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.revokeAllUserRefreshTokens(claims.UserID)
 	utils.Message(w, "password changed successfully")
 }
 
@@ -260,4 +270,56 @@ func generateUUID() string {
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// Logout revokes the presented refresh token. Idempotent: unknown or already
+// revoked tokens still return success so clients can clear local state.
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.RefreshToken == "" {
+		utils.Error(w, http.StatusBadRequest, "refresh_token required")
+		return
+	}
+	if claims, err := h.auth.ValidateToken(body.RefreshToken); err == nil {
+		h.revokeRefreshToken(claims.ID)
+	}
+	utils.Message(w, "logged out")
+}
+
+func hashRefreshToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}
+
+func (h *AuthHandler) storeRefreshToken(claims *auth.Claims, raw string) {
+	if claims == nil || claims.ID == "" {
+		return
+	}
+	expires := claims.ExpiresAt.Time
+	h.db.Exec(
+		`INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at)
+		 VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
+		claims.ID, claims.UserID, hashRefreshToken(raw), expires, time.Now(),
+	)
+}
+
+// refreshTokenRevoked returns true when the jti is missing or revoked. Missing
+// means the token was never issued through this server, so it is not accepted.
+func (h *AuthHandler) refreshTokenRevoked(id string) bool {
+	var revoked sql.NullTime
+	err := h.db.QueryRow(`SELECT revoked_at FROM refresh_tokens WHERE id = ?`, id).Scan(&revoked)
+	if err != nil {
+		return true
+	}
+	return revoked.Valid
+}
+
+func (h *AuthHandler) revokeRefreshToken(id string) {
+	h.db.Exec(`UPDATE refresh_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`, time.Now(), id)
+}
+
+func (h *AuthHandler) revokeAllUserRefreshTokens(userID string) {
+	h.db.Exec(`UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL`, time.Now(), userID)
 }

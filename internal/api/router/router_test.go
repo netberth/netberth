@@ -314,6 +314,20 @@ func TestRouterIntegration(t *testing.T) {
 		t.Fatal("audit log did not record the created forward rule")
 	}
 
+	// Metrics endpoint is public and machine-readable.
+	if resp, body := get("/api/v1/system/metrics"); resp.StatusCode != http.StatusOK || !strings.Contains(body, `"db_driver"`) {
+		t.Fatalf("metrics: %d %s", resp.StatusCode, body)
+	}
+
+	// Logout revokes the refresh token.
+	if resp, body := do("POST", "/api/v1/auth/logout", `{"refresh_token":"`+login.Data.Tokens.RefreshToken+`"}`, bearer); resp.StatusCode != http.StatusOK {
+		t.Fatalf("logout: %d %s", resp.StatusCode, body)
+	}
+	ref, refBody := do("POST", "/api/v1/auth/refresh", `{"refresh_token":"`+login.Data.Tokens.RefreshToken+`"}`, "")
+	if ref.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("refresh after logout should be 401, got %d %s", ref.StatusCode, refBody)
+	}
+
 	// SPA fallback.
 	if resp, body := get("/some/spa/route"); resp.StatusCode != http.StatusOK || strings.Contains(body, "Not Found") {
 		t.Fatalf("spa fallback: %d", resp.StatusCode)
