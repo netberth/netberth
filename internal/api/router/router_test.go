@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	gorillaws "github.com/gorilla/websocket"
 	"github.com/netberth/netberth/internal/api/websocket"
 	"github.com/netberth/netberth/internal/auth"
 	"github.com/netberth/netberth/internal/db"
@@ -121,7 +122,11 @@ func newTestRouter(t *testing.T) (http.Handler, string, string) {
 
 	wire := service.NewWire(database, t.TempDir())
 	hub := websocket.NewHub(wire.Forward, database)
-	r := New(database, authSvc, wire, hub)
+	go hub.Broadcast()
+	r := New(database, authSvc, wire, hub, Options{
+		RateLimitRate:  100,
+		RateLimitBurst: 200,
+	})
 
 	adminTokens, err := authSvc.GenerateTokens(&model.User{ID: userID, Username: "admin", Role: "admin"})
 	if err != nil {
@@ -262,6 +267,23 @@ func TestRouterIntegration(t *testing.T) {
 		t.Fatalf("ws route not found")
 	}
 
+	// A real WebSocket upgrade through the full middleware chain must receive
+	// a status message (regression: logging middleware dropped http.Hijacker).
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/v1/ws"
+	wsc, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("ws dial: %v", err)
+	}
+	wsc.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_, msg, err := wsc.ReadMessage()
+	if err != nil {
+		t.Fatalf("ws read: %v", err)
+	}
+	if len(msg) == 0 {
+		t.Fatal("empty ws message")
+	}
+	wsc.Close()
+
 	// User management: admin only.
 	if resp, body := do("GET", "/api/v1/users", "", bearer); resp.StatusCode != http.StatusOK {
 		t.Fatalf("admin list users: %d %s", resp.StatusCode, body)
@@ -331,5 +353,52 @@ func TestRouterIntegration(t *testing.T) {
 	// SPA fallback.
 	if resp, body := get("/some/spa/route"); resp.StatusCode != http.StatusOK || strings.Contains(body, "Not Found") {
 		t.Fatalf("spa fallback: %d", resp.StatusCode)
+	}
+}
+
+func TestRouterLoginBruteForceLockout(t *testing.T) {
+	r, _, _ := newTestRouter(t)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	post := func(body string) int {
+		resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("post login: %v", err)
+		}
+		defer resp.Body.Close()
+		io.Copy(io.Discard, resp.Body)
+		return resp.StatusCode
+	}
+
+	// Five failed logins from the same peer must auto-lock the peer.
+	for i := 0; i < 5; i++ {
+		if got := post(`{"username":"admin","password":"wrong"}`); got != http.StatusUnauthorized {
+			t.Fatalf("failed login %d: expected 401, got %d", i+1, got)
+		}
+	}
+	if got := post(`{"username":"admin","password":"wrong"}`); got != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 on 6th failed login, got %d", got)
+	}
+	// Even a correct password is rejected while the peer is locked.
+	if got := post(`{"username":"admin","password":"testpass123"}`); got != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 for correct password while locked, got %d", got)
+	}
+}
+
+func TestRouterLoginBodyLimit(t *testing.T) {
+	r, _, _ := newTestRouter(t)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	body := `{"username":"admin","password":"` + strings.Repeat("x", 5<<20) + `"}`
+	resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("post oversized login: %v", err)
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 for oversized login body, got %d", resp.StatusCode)
 	}
 }

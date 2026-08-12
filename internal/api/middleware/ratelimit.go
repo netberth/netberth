@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// maxTrackedRateLimitVisitors bounds the in-memory visitor table.
+const maxTrackedRateLimitVisitors = 100_000
+
 type RateLimiter struct {
 	mu       sync.Mutex
 	visitors map[string]*visitor
@@ -47,11 +50,17 @@ func (rl *RateLimiter) cleanup(interval time.Duration) {
 
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := clientIPKey(r)
 		rl.mu.Lock()
-		v, exists := rl.visitors[r.RemoteAddr]
+		v, exists := rl.visitors[key]
 		if !exists {
+			if len(rl.visitors) >= maxTrackedRateLimitVisitors {
+				rl.mu.Unlock()
+				next.ServeHTTP(w, r)
+				return
+			}
 			v = &visitor{tokens: float64(rl.burst), lastCheck: time.Now()}
-			rl.visitors[r.RemoteAddr] = v
+			rl.visitors[key] = v
 		}
 		elapsed := time.Since(v.lastCheck).Seconds()
 		v.tokens += elapsed * float64(rl.rate)

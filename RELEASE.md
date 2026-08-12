@@ -2,44 +2,85 @@
 
 ## Current Release
 
-**v1.2.0** (2026-08-12, draft pending review) — Stability & Usability
+**v1.3.0** (2026-08-12) — Reliability & Notifications
 
-- `netberth doctor`: pre-flight self check (config, database integrity, TLS, state dir, ports)
-- Refresh token revocation: logout, rotation, and full revocation on password change
-- Schema versioning with automatic pre-migration backup (`.pre-upgrade.bak`)
-- `/api/v1/system/metrics`: runtime, module counts, forward status, storage mounts
-- HSTS over TLS; `govulncheck` + `npm audit` in CI; Go 1.26 toolchain
-- Dependency security upgrades: chi v5.3.0, pgx v5.9.2, jwt v5.2.2, react-router-dom v7
+- Webhook notifications: `/api/v1/webhooks` CRUD + test endpoint, admin UI,
+  HMAC-SHA256 signatures, retries/backoff, bounded queue, event filtering
+- Trusted proxy whitelist (`NB_TRUSTED_PROXIES`): proxy headers are ignored by
+  default and only honored from explicitly trusted peers (IP/CIDR)
+- Login/API hardening: body caps (8KB/64KB), password ≤128B, username ≤64B,
+  per-IP brute-force lockout (5 fails → 5 min 429), non-spoofable rate limiting
+- HTTP server hardening: `ReadHeaderTimeout` 5s, `IdleTimeout` 120s,
+  `MaxHeaderBytes` 64KB; schema v4 with automatic pre-migration backup
+- All prior v1.2.0 hardening: doctor, refresh-token revocation, schema
+  versioning, `/api/v1/system/metrics`, HSTS, Go 1.26 + security upgrades
 
 Previous release: **v1.1.0** — TLS panel, multi-user management, audit dashboard, PostgreSQL
 
 ## Building a Release
 
 ```bash
-./scripts/release.sh    # requires zig (brew install zig)
+./scripts/release-gate.sh   # one-command gate: tests + build + public audit + public tests
+./scripts/release.sh        # build artifacts only (requires zig: brew install zig)
 ```
 
-The script:
+`release-gate.sh` verifies:
+
+1. Private tree is clean and `pkg/version` matches `web/package.json`
+2. Full `go test ./...` passes
+3. `release.sh` embeds the frontend, cross-compiles amd64/arm64 with
+   `zig cc` (static musl, `-trimpath -buildvcs=false`), runs mandatory strings
+   checks and writes `sha256sums.txt`
+4. Private tree is mirrored to the public repo **in place** (the public `.git`
+   is never deleted) with the canonical exclude list
+5. Public tree audit: no HANDOVER/AGENTS/reports, no enterprise module, no
+   user paths or historical secrets
+6. Independent `go build` + `go test` inside the public tree
+
+The release script itself:
 
 1. Builds the React frontend and embeds it into `internal/api/handler/webroot/`
 2. Cross-compiles `netberth-linux-amd64` and `netberth-linux-arm64` with
    `zig cc` (static musl), `-trimpath -buildvcs=false`, and a CC wrapper that
    maps `$HOME` to `/BUILDER`
-3. Runs mandatory strings checks (user paths, `netharbor`, `GenerateLicense`,
-   internal IPs, historical secrets, other account names) — any nonzero fails the build
+3. Runs mandatory strings checks (user paths, legacy product names, internal
+   IPs, historical secrets, other account names) — any nonzero fails the build
 4. Writes `sha256sums.txt`
 
 Artifacts land in `dist/release/` (override with `OUT=...`).
 
+## Release Policy
+
+- **Semver**: new features → minor (`1.3.0`), bug/security fixes → patch
+  (`1.3.1`), breaking changes before 1.0 → minor. Keep a CHANGELOG entry per release.
+- **Single source of truth**: the released tag must point to the exact commit
+  the assets were built from (`git rev-parse HEAD` == tag == manifest commit).
+  Any new merge invalidates a draft; rebuild the draft, never publish stale assets.
+- **Immutable tags**: once a release is published, the tag is never moved or
+  rewritten. If a fix is needed, cut a patch release.
+- **Draft hygiene**: a draft must be rebuilt (or deleted) whenever code lands;
+  title drafts with the commit SHA so a stale draft cannot be published by mistake.
+- **Human gates**: only the operator may publish the GitHub release, configure
+  Docker Hub secrets, or perform account-level actions.
+
 ## Publishing
 
 ```bash
+./scripts/release-gate.sh                    # must be all green first
+cd netberth-public   # your public checkout (must have origin github.com/netberth/netberth)
+git add -A && git commit -m "release: v<version>"
+git push origin main
+git tag v<version> && git push origin v<version>
+
 gh release create v<version> --draft --title "NetBerth v<version>" \
   --notes-file notes.md dist/release/netberth-linux-amd64 \
   dist/release/netberth-linux-arm64 dist/release/sha256sums.txt
 # review the draft, then:
 gh release edit v<version> --draft=false
 ```
+
+After publishing, download the assets and verify `sha256sum -c sha256sums.txt`
+from a clean machine. Never reuse a previous version's assets.
 
 ## Upgrade Path
 

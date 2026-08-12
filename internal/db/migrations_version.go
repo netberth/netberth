@@ -14,7 +14,7 @@ import (
 
 // SchemaVersion is the current schema version. Bump it when business tables
 // change so existing databases get a pre-migration backup.
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 // ensureSchemaMigrations creates the version bookkeeping table. The DDL is
 // portable across SQLite and PostgreSQL.

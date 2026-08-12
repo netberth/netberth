@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -32,7 +33,9 @@ func freeConfig(t *testing.T) *config.Config {
 	cfg.Server.Host = "127.0.0.1"
 	cfg.Server.Port = osPort(t)
 	cfg.Database.Path = filepath.Join(t.TempDir(), "doctor.db")
-	t.Setenv("NB_PROXY_PORT", "")
+	// Use a dynamically allocated proxy port so the suite never depends on
+	// port 8080 being free on the host (other services often claim it).
+	t.Setenv("NB_PROXY_PORT", strconv.Itoa(osPort(t)))
 	return cfg
 }
 

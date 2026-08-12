@@ -33,6 +33,38 @@ func TestLoginHandlerBadBody(t *testing.T) {
 	expectStatus(t, w2, http.StatusBadRequest)
 }
 
+func TestLoginHandlerBodyLimits(t *testing.T) {
+	h, db := setupAuthHandler(t)
+	defer db.Close()
+
+	// Oversized body (5 MB password) must be rejected before argon2 runs.
+	big := make([]byte, 5<<20)
+	for i := range big {
+		big[i] = 'x'
+	}
+	body := append([]byte(`{"username":"admin","password":"`), big...)
+	body = append(body, '"', '}')
+	w := doJSON(t, h.Login, http.MethodPost, "/api/v1/auth/login", body)
+	expectStatus(t, w, http.StatusRequestEntityTooLarge)
+
+	// Password just over the byte cap must be rejected without hashing.
+	longPass := `{"username":"admin","password":"` + strings.Repeat("p", maxPasswordBytes+1) + `"}`
+	w2 := doJSON(t, h.Login, http.MethodPost, "/api/v1/auth/login", []byte(longPass))
+	expectStatus(t, w2, http.StatusBadRequest)
+
+	// Oversized username must be rejected.
+	longUser := `{"username":"` + strings.Repeat("u", maxUsernameBytes+1) + `","password":"okpass123"}`
+	w3 := doJSON(t, h.Login, http.MethodPost, "/api/v1/auth/login", []byte(longUser))
+	expectStatus(t, w3, http.StatusBadRequest)
+
+	// Boundary sizes still pass body/length gates (and fail auth, not validation).
+	boundaryUser := strings.Repeat("u", maxUsernameBytes)
+	boundaryPass := strings.Repeat("p", maxPasswordBytes)
+	bodyOK, _ := json.Marshal(loginRequest{Username: boundaryUser, Password: boundaryPass})
+	w4 := doJSON(t, h.Login, http.MethodPost, "/api/v1/auth/login", bodyOK)
+	expectStatus(t, w4, http.StatusUnauthorized)
+}
+
 func TestRefreshTokenHandler(t *testing.T) {
 	h, db := setupAuthHandler(t)
 	defer db.Close()

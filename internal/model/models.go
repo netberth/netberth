@@ -196,6 +196,21 @@ type StorageMount struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// === Webhook ===
+
+// WebhookEndpoint delivers selected bus events to an external URL.
+type WebhookEndpoint struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	URL       string    `json:"url"`
+	Secret    string    `json:"-"`
+	HasSecret bool      `json:"has_secret"`
+	Events    []string  `json:"events"` // empty slice = all events
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // === Audit ===
 
 type AuditEvent struct {

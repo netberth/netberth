@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -40,13 +41,27 @@ type changePasswordRequest struct {
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	limitBody(w, r, maxAuthBodyBytes)
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			utils.Error(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Username == "" || req.Password == "" {
 		utils.Error(w, http.StatusBadRequest, "username and password required")
+		return
+	}
+	if len(req.Password) > maxPasswordBytes {
+		utils.Error(w, http.StatusBadRequest, "password too long")
+		return
+	}
+	if len(req.Username) > maxUsernameBytes {
+		utils.Error(w, http.StatusBadRequest, "username too long")
 		return
 	}
 	var user model.User
@@ -91,10 +106,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	limitBody(w, r, maxAuthBodyBytes)
 	var body struct {
 		RefreshToken string `json:"refresh_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			utils.Error(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -148,13 +169,23 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	limitBody(w, r, maxAuthBodyBytes)
 	var req changePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			utils.Error(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if len(req.NewPassword) < 8 {
 		utils.Error(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+	if len(req.NewPassword) > maxPasswordBytes || len(req.OldPassword) > maxPasswordBytes {
+		utils.Error(w, http.StatusBadRequest, "password too long")
 		return
 	}
 	var currentHash string

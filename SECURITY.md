@@ -10,15 +10,16 @@ We aim to acknowledge reports within 48 hours and release fixes within 7 days.
 
 | Version | Status |
 |---------|--------|
-| 1.2.0 | Active |
-| 1.1.0 | Previous |
-| 1.0.0-rc1 | EOL |
+| 1.3.0 | Active |
+| 1.2.0 | Previous |
+| 1.1.0 | EOL |
 
 ## Security Architecture
 
 - Authentication: Argon2id + JWT (HS256, 15m/7d rotation)
 - Authorization: RBAC (admin/operator/viewer) + ForcePasswordChange
-- Transport: rate limiting + CSRF + brute-force protection
+- Transport: rate limiting + CSRF + brute-force protection + trusted-proxy
+  whitelist (`NB_TRUSTED_PROXIES`); webhook payloads signed with HMAC-SHA256
 - Data: SQLite WAL (default, _txlock=immediate) or PostgreSQL (NB_DB_DRIVER/NB_DB_DSN)
 - Path isolation: afero.BasePathFs (FTP) + HasPrefix guard (WebDAV)
 

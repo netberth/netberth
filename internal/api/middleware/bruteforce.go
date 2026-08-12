@@ -5,10 +5,18 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
+
+	chimw "github.com/go-chi/chi/v5/middleware"
 )
+
+// maxTrackedLoginFailures bounds the in-memory failure table so an attacker
+// cannot grow it without bound (defense against memory exhaustion).
+const maxTrackedLoginFailures = 100_000
 
 type BruteForceLimiter struct {
 	mu       sync.Mutex
@@ -42,46 +50,59 @@ func (b *BruteForceLimiter) LoginMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		clientIP := r.RemoteAddr
+		clientIP := clientIPKey(r)
 
+		// Locked out: reject before touching the (expensive) login handler.
 		b.mu.Lock()
-		f, exists := b.failures[clientIP]
-		if !exists {
-			f = &loginFailures{}
-			b.failures[clientIP] = f
-		}
-
-		// Check lock
-		if time.Now().Before(f.lockedUntil) {
+		if f, ok := b.failures[clientIP]; ok && time.Now().Before(f.lockedUntil) {
 			b.mu.Unlock()
-			w.Header().Set("Retry-After", "300")
+			w.Header().Set("Retry-After", strconv.Itoa(int(b.lockDuration.Seconds())))
 			http.Error(w, `{"error":"too many login attempts, try again later"}`, http.StatusTooManyRequests)
 			return
 		}
-
-		// Reset window
-		if time.Since(f.firstTry) > b.window {
-			f.count = 0
-			f.firstTry = time.Now()
-		}
 		b.mu.Unlock()
 
-		next.ServeHTTP(w, r)
+		// Observe the response so failures are recorded automatically and
+		// successful logins clear the slate for this peer.
+		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rw, r)
+		switch rw.status {
+		case http.StatusUnauthorized:
+			b.RecordFailure(clientIP)
+		case http.StatusOK:
+			b.Reset(clientIP)
+		}
 	})
 }
 
 func (b *BruteForceLimiter) RecordFailure(clientIP string) {
+	clientIP = normalizeIP(clientIP)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	f, exists := b.failures[clientIP]
 	if !exists {
+		if len(b.failures) >= maxTrackedLoginFailures {
+			return
+		}
 		f = &loginFailures{firstTry: time.Now()}
 		b.failures[clientIP] = f
 	}
 	f.count++
+	// Roll the window so a stale burst from long ago cannot lock a peer.
+	if time.Since(f.firstTry) > b.window {
+		f.count = 1
+		f.firstTry = time.Now()
+	}
 	if f.count >= b.maxFailures {
 		f.lockedUntil = time.Now().Add(b.lockDuration)
 	}
+}
+
+// Reset clears a peer's failure state after a successful login.
+func (b *BruteForceLimiter) Reset(clientIP string) {
+	b.mu.Lock()
+	delete(b.failures, normalizeIP(clientIP))
+	b.mu.Unlock()
 }
 
 func (b *BruteForceLimiter) cleanup(interval time.Duration) {
@@ -96,4 +117,31 @@ func (b *BruteForceLimiter) cleanup(interval time.Duration) {
 		}
 		b.mu.Unlock()
 	}
+}
+
+// clientIPKey returns a normalized, non-spoofable client identity. It prefers
+// the TCP peer address recorded by chi's ClientIPFromRemoteAddr middleware;
+// proxy headers are deliberately never trusted for security decisions.
+func clientIPKey(r *http.Request) string {
+	if ip := chimw.GetClientIP(r.Context()); ip != "" {
+		return ip
+	}
+	return normalizeIP(r.RemoteAddr)
+}
+
+func normalizeIP(s string) string {
+	if s == "" {
+		return "unknown"
+	}
+	if ip := net.ParseIP(s); ip != nil {
+		return ip.String()
+	}
+	host, _, err := net.SplitHostPort(s)
+	if err != nil {
+		return s
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.String()
+	}
+	return host
 }

@@ -5,6 +5,8 @@
 package config
 
 import (
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,9 +27,17 @@ type ServerConfig struct {
 	Port         int           `yaml:"port" env:"NB_SERVER_PORT"`
 	ReadTimeout  time.Duration `yaml:"read_timeout"`
 	WriteTimeout time.Duration `yaml:"write_timeout"`
-	TLSEnabled   bool          `yaml:"tls_enabled" env:"NB_TLS_ENABLED"`
-	TLSCert      string        `yaml:"tls_cert" env:"NB_TLS_CERT"`
-	TLSKey       string        `yaml:"tls_key" env:"NB_TLS_KEY"`
+	// ReadHeaderTimeout bounds how long a peer may take to send headers
+	// (slowloris defense); IdleTimeout bounds keep-alive idle sockets.
+	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout"`
+	IdleTimeout       time.Duration `yaml:"idle_timeout"`
+	MaxHeaderBytes    int           `yaml:"max_header_bytes"`
+	RateLimitRate     int           `yaml:"rate_limit_rate" env:"NB_RATE_LIMIT_RATE"`
+	RateLimitBurst    int           `yaml:"rate_limit_burst" env:"NB_RATE_LIMIT_BURST"`
+	TrustedProxies    []string      `yaml:"trusted_proxies" env:"NB_TRUSTED_PROXIES"`
+	TLSEnabled        bool          `yaml:"tls_enabled" env:"NB_TLS_ENABLED"`
+	TLSCert           string        `yaml:"tls_cert" env:"NB_TLS_CERT"`
+	TLSKey            string        `yaml:"tls_key" env:"NB_TLS_KEY"`
 }
 
 type DatabaseConfig struct {
@@ -51,11 +61,16 @@ type LogConfig struct {
 func Default() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Host:         "0.0.0.0",
-			Port:         8443,
-			ReadTimeout:  30 * time.Second,
-			WriteTimeout: 30 * time.Second,
-			TLSEnabled:   false,
+			Host:              "0.0.0.0",
+			Port:              8443,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			ReadHeaderTimeout: 5 * time.Second,
+			IdleTimeout:       120 * time.Second,
+			MaxHeaderBytes:    64 << 10,
+			RateLimitRate:     100,
+			RateLimitBurst:    200,
+			TLSEnabled:        false,
 		},
 		Database: DatabaseConfig{
 			Path: "./data/netberth.db",
@@ -90,6 +105,9 @@ func Load(path string) (*Config, error) {
 	// config file is the normal deployment shape (e.g. Docker), and skipping
 	// applyEnv here silently disabled every NB_* variable.
 	cfg.applyEnv()
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
 }
 
@@ -137,6 +155,50 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("NB_TLS_KEY"); v != "" {
 		c.Server.TLSKey = v
 	}
+	if v := os.Getenv("NB_RATE_LIMIT_RATE"); v != "" {
+		c.Server.RateLimitRate = parseInt(v)
+	}
+	if v := os.Getenv("NB_RATE_LIMIT_BURST"); v != "" {
+		c.Server.RateLimitBurst = parseInt(v)
+	}
+	if v := os.Getenv("NB_TRUSTED_PROXIES"); v != "" {
+		c.Server.TrustedProxies = splitList(v)
+	}
+}
+
+// validate rejects configuration that would lock the panel out or silently
+// ignore proxy headers. Called after YAML + env are merged.
+func (c *Config) validate() error {
+	if c.Server.RateLimitRate < 1 || c.Server.RateLimitBurst < 1 {
+		return fmt.Errorf("rate_limit_rate and rate_limit_burst must be >= 1 (got %d/%d)",
+			c.Server.RateLimitRate, c.Server.RateLimitBurst)
+	}
+	for _, s := range c.Server.TrustedProxies {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if strings.Contains(s, "/") {
+			if _, _, err := net.ParseCIDR(s); err != nil {
+				return fmt.Errorf("invalid trusted proxy CIDR %q: %w", s, err)
+			}
+			continue
+		}
+		if net.ParseIP(s) == nil {
+			return fmt.Errorf("invalid trusted proxy IP %q", s)
+		}
+	}
+	return nil
+}
+
+func parseInt(v string) int {
+	n := 0
+	for _, c := range v {
+		if c >= '0' && c <= '9' {
+			n = n*10 + int(c-'0')
+		}
+	}
+	return n
 }
 
 func parseBool(v string) bool {
@@ -146,4 +208,15 @@ func parseBool(v string) bool {
 	default:
 		return false
 	}
+}
+
+func splitList(v string) []string {
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

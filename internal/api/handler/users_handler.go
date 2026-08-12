@@ -7,6 +7,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -71,8 +72,14 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Create adds a new user with a forced password change on first login.
 func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
+	limitBody(w, r, maxAuthBodyBytes)
 	var req createUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			utils.Error(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -87,6 +94,14 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Password) < 8 {
 		utils.Error(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+	if len(req.Password) > maxPasswordBytes {
+		utils.Error(w, http.StatusBadRequest, "password too long")
+		return
+	}
+	if len(req.Username) > maxUsernameBytes {
+		utils.Error(w, http.StatusBadRequest, "username too long")
 		return
 	}
 	if !validator.Email(req.Email) {
@@ -131,8 +146,14 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Update changes email, role and enabled state with last-admin protection.
 func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	limitBody(w, r, maxAuthBodyBytes)
 	var req updateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			utils.Error(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -218,13 +239,23 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // ResetPassword sets a new password and forces a change on next login.
 func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	limitBody(w, r, maxAuthBodyBytes)
 	var req resetPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			utils.Error(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if len(req.NewPassword) < 8 {
 		utils.Error(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+	if len(req.NewPassword) > maxPasswordBytes {
+		utils.Error(w, http.StatusBadRequest, "password too long")
 		return
 	}
 

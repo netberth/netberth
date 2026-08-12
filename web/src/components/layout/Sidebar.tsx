@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, ArrowLeftRight, Globe, RefreshCw, Network,
-  Power, Clock, Shield, HardDrive, Settings, Users as UsersIcon, ScrollText, Anchor
+  Power, Clock, Shield, HardDrive, Settings, Users as UsersIcon, ScrollText, Anchor, Send
 } from 'lucide-react'
 import { useAuth } from '@/stores/auth'
 
@@ -18,12 +18,13 @@ const navItems = [
   { to: '/storage', icon: HardDrive, label: 'Storage' },
   { to: '/users', icon: UsersIcon, label: 'Users' },
   { to: '/audit', icon: ScrollText, label: 'Audit Log' },
+  { to: '/webhooks', icon: Send, label: 'Webhooks' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
 export function Sidebar() {
   const { user } = useAuth()
-  const adminOnly = ['/users', '/audit']
+  const adminOnly = ['/users', '/audit', '/webhooks']
   const items = user?.role === 'admin' ? navItems : navItems.filter(i => !adminOnly.includes(i.to))
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-56 border-r border-border bg-card">
@@ -52,7 +53,7 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="absolute bottom-0 left-0 right-0 border-t border-border p-3">
-        <div className="text-xs text-muted-foreground">NetBerth v1.2.0</div>
+        <div className="text-xs text-muted-foreground">NetBerth v1.3.0</div>
       </div>
     </aside>
   )

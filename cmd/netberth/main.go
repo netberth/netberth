@@ -21,6 +21,7 @@ import (
 	"github.com/netberth/netberth/internal/auth"
 	"github.com/netberth/netberth/internal/config"
 	"github.com/netberth/netberth/internal/db"
+	"github.com/netberth/netberth/internal/diagnose"
 	"github.com/netberth/netberth/internal/service"
 	"github.com/netberth/netberth/internal/tlsutil"
 	"github.com/netberth/netberth/pkg/logger"
@@ -33,6 +34,15 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Init(cfg.Log.Level, cfg.Log.Format)
+
+	if len(os.Args) > 1 && os.Args[1] == "doctor" {
+		res := diagnose.Run(cfg)
+		diagnose.Print(os.Stdout, res)
+		if !res.AllOK() {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 
 	// SQLite stores everything next to the DB file; Postgres keeps local
 	// state (JWT secret, certs) under ./data.
@@ -97,14 +107,24 @@ func main() {
 
 	hub := ws.NewHub(wire.Forward, database)
 	go hub.Broadcast()
-	handler := router.New(database, authService, wire, hub)
+	webhookDispatcher := service.NewWebhookDispatcher(database, wire.Bus())
+	defer webhookDispatcher.Stop()
+	handler := router.New(database, authService, wire, hub, router.Options{
+		TrustedProxies:    cfg.Server.TrustedProxies,
+		RateLimitRate:     cfg.Server.RateLimitRate,
+		RateLimitBurst:    cfg.Server.RateLimitBurst,
+		WebhookDispatcher: webhookDispatcher,
+	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
-		Addr:         addr,
-		Handler:      handler,
-		ReadTimeout:  cfg.Server.ReadTimeout,
-		WriteTimeout: cfg.Server.WriteTimeout,
+		Addr:              addr,
+		Handler:           handler,
+		ReadTimeout:       cfg.Server.ReadTimeout,
+		WriteTimeout:      cfg.Server.WriteTimeout,
+		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
+		IdleTimeout:       cfg.Server.IdleTimeout,
+		MaxHeaderBytes:    cfg.Server.MaxHeaderBytes,
 	}
 
 	scheme := "http"

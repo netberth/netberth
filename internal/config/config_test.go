@@ -19,6 +19,18 @@ func TestDefault(t *testing.T) {
 	if c.Server.ReadTimeout != 30*time.Second || c.Server.WriteTimeout != 30*time.Second {
 		t.Fatalf("unexpected timeouts: %+v", c.Server)
 	}
+	if c.Server.ReadHeaderTimeout != 5*time.Second {
+		t.Fatalf("unexpected read header timeout: %+v", c.Server)
+	}
+	if c.Server.IdleTimeout != 120*time.Second {
+		t.Fatalf("unexpected idle timeout: %+v", c.Server)
+	}
+	if c.Server.MaxHeaderBytes != 64<<10 {
+		t.Fatalf("unexpected max header bytes: %+v", c.Server)
+	}
+	if c.Server.RateLimitRate != 100 || c.Server.RateLimitBurst != 200 {
+		t.Fatalf("unexpected rate limit defaults: %+v", c.Server)
+	}
 	if c.Server.TLSEnabled || c.Server.TLSCert != "" || c.Server.TLSKey != "" {
 		t.Fatalf("TLS should default to disabled: %+v", c.Server)
 	}
@@ -68,6 +80,9 @@ func TestApplyEnv(t *testing.T) {
 	t.Setenv("NB_TLS_CERT", "/x/cert.pem")
 	t.Setenv("NB_TLS_KEY", "/x/key.pem")
 	t.Setenv("NB_DB_PATH", "/data/nb.db")
+	t.Setenv("NB_RATE_LIMIT_RATE", "5000")
+	t.Setenv("NB_RATE_LIMIT_BURST", "10000")
+	t.Setenv("NB_TRUSTED_PROXIES", "10.0.0.1, 192.168.1.0/24")
 
 	c := Default()
 	c.applyEnv()
@@ -79,6 +94,42 @@ func TestApplyEnv(t *testing.T) {
 	}
 	if c.Database.Path != "/data/nb.db" {
 		t.Fatalf("unexpected db path: %s", c.Database.Path)
+	}
+	if c.Server.RateLimitRate != 5000 || c.Server.RateLimitBurst != 10000 {
+		t.Fatalf("unexpected rate limit env: %+v", c.Server)
+	}
+	if len(c.Server.TrustedProxies) != 2 ||
+		c.Server.TrustedProxies[0] != "10.0.0.1" ||
+		c.Server.TrustedProxies[1] != "192.168.1.0/24" {
+		t.Fatalf("unexpected trusted proxies: %+v", c.Server.TrustedProxies)
+	}
+}
+
+func TestValidateRejectsBadRateLimit(t *testing.T) {
+	c := Default()
+	c.Server.RateLimitRate = 0
+	if err := c.validate(); err == nil {
+		t.Fatal("expected error for rate_limit_rate=0")
+	}
+	c.Server.RateLimitRate = 100
+	c.Server.RateLimitBurst = -1
+	if err := c.validate(); err == nil {
+		t.Fatal("expected error for rate_limit_burst=-1")
+	}
+}
+
+func TestValidateRejectsBadTrustedProxy(t *testing.T) {
+	c := Default()
+	c.Server.TrustedProxies = []string{"not-an-ip"}
+	if err := c.validate(); err == nil {
+		t.Fatal("expected error for invalid trusted proxy")
+	}
+}
+
+func TestLoadRejectsInvalidEnvConfig(t *testing.T) {
+	t.Setenv("NB_RATE_LIMIT_RATE", "0")
+	if _, err := Load(filepath.Join(t.TempDir(), "missing.yaml")); err == nil {
+		t.Fatal("expected Load error for rate_limit_rate=0")
 	}
 }
 

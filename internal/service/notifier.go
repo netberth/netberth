@@ -35,6 +35,17 @@ const (
 	EventStorageDeleted EventType = "storage:deleted"
 )
 
+var allEventTypes = []EventType{
+	EventForwardCreated, EventForwardUpdated, EventForwardDeleted,
+	EventProxyCreated, EventProxyUpdated, EventProxyDeleted,
+	EventDDNSCreated, EventDDNSUpdated, EventDDNSDeleted,
+	EventSTUNCreated, EventSTUNUpdated, EventSTUNDeleted,
+	EventWOLCreated, EventWOLUpdated, EventWOLDeleted,
+	EventCronCreated, EventCronUpdated, EventCronDeleted,
+	EventACMECreated, EventACMEUpdated, EventACMEDeleted,
+	EventStorageCreated, EventStorageUpdated, EventStorageDeleted,
+}
+
 type Event struct {
 	Type EventType
 	ID   string
@@ -55,6 +66,15 @@ func (b *Bus) Subscribe(eventType EventType, handler Handler) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.handlers[eventType] = append(b.handlers[eventType], handler)
+}
+
+// SubscribeAll registers a handler for every known event type.
+func (b *Bus) SubscribeAll(handler Handler) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, t := range allEventTypes {
+		b.handlers[t] = append(b.handlers[t], handler)
+	}
 }
 
 func (b *Bus) Publish(event Event) {

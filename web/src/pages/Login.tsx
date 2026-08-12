@@ -45,7 +45,7 @@ export function Login() {
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
-                placeholder="admin"
+                placeholder="Enter username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoFocus

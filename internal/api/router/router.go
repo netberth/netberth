@@ -7,6 +7,7 @@ package router
 import (
 	"database/sql"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -18,23 +19,51 @@ import (
 	"github.com/netberth/netberth/internal/tenant"
 )
 
-func New(db *sql.DB, authService *auth.Service, wire *service.Wire, hub *ws.Hub) http.Handler {
+// Options configures the HTTP router. Zero values fall back to safe defaults.
+type Options struct {
+	TrustedProxies    []string
+	RateLimitRate     int
+	RateLimitBurst    int
+	WebhookDispatcher *service.WebhookDispatcher
+}
+
+func New(db *sql.DB, authService *auth.Service, wire *service.Wire, hub *ws.Hub, opts ...Options) http.Handler {
+	cfg := Options{RateLimitRate: 100, RateLimitBurst: 200}
+	if len(opts) > 0 {
+		cfg = opts[0]
+	}
+	if cfg.RateLimitRate < 1 {
+		cfg.RateLimitRate = 100
+	}
+	if cfg.RateLimitBurst < 1 {
+		cfg.RateLimitBurst = 200
+	}
+	resolver, err := custommw.NewClientIPResolver(cfg.TrustedProxies)
+	if err != nil {
+		// config.Load validates trusted proxies before the router is built;
+		// reaching this with an invalid list is a programming error.
+		panic(err)
+	}
+
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
+	r.Use(resolver.Middleware)
 	r.Use(tenant.Middleware(&tenant.SingleTenantProvider{}))
 	r.Use(custommw.SecurityHeaders)
 	r.Use(custommw.CORSMiddleware)
 	r.Use(custommw.LoggingMiddleware)
-	r.Use(custommw.NewRateLimiter(100, 200).Middleware)
+	r.Use(custommw.NewRateLimiter(cfg.RateLimitRate, cfg.RateLimitBurst).Middleware)
 	r.Use(chimw.Recoverer)
 	r.Use(custommw.AuditMiddleware(db))
+
+	bruteForce := custommw.NewBruteForceLimiter(5, 5*time.Minute, 10*time.Minute)
 
 	bus := wire.Bus()
 
 	authH := handler.NewAuthHandler(db, authService)
 	userH := handler.NewUserHandler(db, authService)
+	webhookH := handler.NewWebhookHandler(db, cfg.WebhookDispatcher)
 	auditH := handler.NewAuditHandler(db)
 	forwardH := handler.NewForwardHandler(db)
 	proxyH := handler.NewProxyHandler(db)
@@ -55,10 +84,12 @@ func New(db *sql.DB, authService *auth.Service, wire *service.Wire, hub *ws.Hub)
 	storageH.SetNotifier(busNotifier(bus, "storage"))
 
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(custommw.LimitRequestBody)
+
 		// Public endpoints — no auth required
 		r.Get("/system/status", handler.NewSystemHandler(db).Status)
 		r.Get("/system/metrics", handler.NewMetricsHandler(db, wire.Forward).Metrics)
-		r.Post("/auth/login", authH.Login)
+		r.With(bruteForce.LoginMiddleware).Post("/auth/login", authH.Login)
 		r.Get("/docs", handler.DocsHandler())
 		r.Post("/auth/refresh", authH.RefreshToken)
 
@@ -105,6 +136,11 @@ func New(db *sql.DB, authService *auth.Service, wire *service.Wire, hub *ws.Hub)
 				r.Put("/users/{id}", userH.Update)
 				r.Delete("/users/{id}", userH.Delete)
 				r.Post("/users/{id}/reset-password", userH.ResetPassword)
+				r.Get("/webhooks", webhookH.List)
+				r.Post("/webhooks", webhookH.Create)
+				r.Put("/webhooks/{id}", webhookH.Update)
+				r.Delete("/webhooks/{id}", webhookH.Delete)
+				r.Post("/webhooks/{id}/test", webhookH.Test)
 			})
 		})
 	})

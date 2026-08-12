@@ -258,6 +258,19 @@ func sqliteMigrations() []string {
 		`CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_events(resource_type, resource_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_events(tenant_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_events(created_at)`,
+
+		// === Webhooks (v1.3) ===
+		`CREATE TABLE IF NOT EXISTS webhook_endpoints (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL DEFAULT '',
+			name TEXT NOT NULL,
+			url TEXT NOT NULL,
+			secret TEXT NOT NULL DEFAULT '',
+			events TEXT NOT NULL DEFAULT '[]',
+			enabled INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 }
 

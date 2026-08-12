@@ -169,6 +169,17 @@ export interface AuditEvent {
   created_at: string
 }
 
+export interface WebhookEndpoint {
+  id: string
+  name: string
+  url: string
+  has_secret: boolean
+  events: string[]
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface APIResponse<T = unknown> {
   success: boolean
   data?: T
