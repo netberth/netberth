@@ -14,6 +14,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/netberth/netberth/internal/engine/forward"
+	"github.com/netberth/netberth/internal/model"
 	"github.com/netberth/netberth/pkg/logger"
 	"github.com/netberth/netberth/pkg/version"
 )
@@ -45,20 +46,27 @@ type ForwardStatus struct {
 }
 
 type Hub struct {
-	mu         sync.RWMutex
-	clients    map[*websocket.Conn]bool
-	forwardEng *forward.Engine
-	db         *sql.DB
-	startTime  time.Time
+	mu                sync.RWMutex
+	clients           map[*websocket.Conn]bool
+	forwardEng        *forward.Engine
+	db                *sql.DB
+	startTime         time.Time
+	statusFn          func() []model.ForwardRuleStatus
+	broadcastInterval time.Duration
+	stopCh            chan struct{}
 }
 
 func NewHub(forwardEng *forward.Engine, db *sql.DB) *Hub {
-	return &Hub{
-		clients:    make(map[*websocket.Conn]bool),
-		forwardEng: forwardEng,
-		db:         db,
-		startTime:  time.Now(),
+	h := &Hub{
+		clients:           make(map[*websocket.Conn]bool),
+		forwardEng:        forwardEng,
+		db:                db,
+		startTime:         time.Now(),
+		broadcastInterval: 2 * time.Second,
+		stopCh:            make(chan struct{}),
 	}
+	h.statusFn = forwardEng.Status
+	return h
 }
 
 func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
@@ -90,17 +98,26 @@ func (h *Hub) readLoop(conn *websocket.Conn) {
 }
 
 func (h *Hub) Broadcast() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(h.broadcastInterval)
 	defer ticker.Stop()
-	for range ticker.C {
-		msg := h.buildStatus()
-		h.mu.RLock()
-		for conn := range h.clients {
-			if err := conn.WriteJSON(msg); err != nil {
-				logger.Log.Debug().Err(err).Msg("ws write error")
-			}
+	for {
+		select {
+		case <-h.stopCh:
+			return
+		case <-ticker.C:
+			h.broadcastOnce()
 		}
-		h.mu.RUnlock()
+	}
+}
+
+func (h *Hub) broadcastOnce() {
+	msg := h.buildStatus()
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for conn := range h.clients {
+		if err := conn.WriteJSON(msg); err != nil {
+			logger.Log.Debug().Err(err).Msg("ws write error")
+		}
 	}
 }
 
@@ -116,7 +133,7 @@ func (h *Hub) buildStatus() StatusMessage {
 		Version:    version.Version,
 	}
 
-	stats := h.forwardEng.Status()
+	stats := h.statusFn()
 	forwardStatus := make([]ForwardStatus, len(stats))
 	for i, s := range stats {
 		forwardStatus[i] = ForwardStatus{

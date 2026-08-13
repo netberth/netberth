@@ -5,7 +5,16 @@
 package acme
 
 import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"errors"
+	"math/big"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,10 +24,11 @@ import (
 )
 
 type mockACMEDB struct {
-	mu      sync.Mutex
-	certs   []model.ACMECertificate
-	updates []model.ACMECertificate
-	err     error
+	mu        sync.Mutex
+	certs     []model.ACMECertificate
+	updates   []model.ACMECertificate
+	err       error
+	updateErr error
 }
 
 func (m *mockACMEDB) GetCertificates() ([]model.ACMECertificate, error) {
@@ -30,6 +40,9 @@ func (m *mockACMEDB) GetCertificates() ([]model.ACMECertificate, error) {
 func (m *mockACMEDB) UpdateCertificate(c model.ACMECertificate) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.updateErr != nil {
+		return m.updateErr
+	}
 	m.updates = append(m.updates, c)
 	return nil
 }
@@ -197,4 +210,301 @@ func TestRenewDue(t *testing.T) {
 	if len(due) != 1 || due[0].ID != "due" {
 		t.Fatalf("expected only 'due' certificate, got %+v", due)
 	}
+}
+
+// fakeACME is a scripted ACME client used to exercise the full issuance path.
+type fakeACME struct {
+	mu             sync.Mutex
+	registerErr    error
+	registerExists bool
+	authorizeErr   error
+	authzErr       error
+	acceptErr      error
+	waitErr        error
+	finalizeErr    error
+	order          *acme.Order
+	auth           *acme.Authorization
+	der            [][]byte
+	acceptCalled   bool
+}
+
+func (f *fakeACME) Register(_ context.Context, _ *acme.Account, _ func(string) bool) (*acme.Account, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.registerExists {
+		return nil, acme.ErrAccountAlreadyExists
+	}
+	return &acme.Account{}, f.registerErr
+}
+
+func (f *fakeACME) AuthorizeOrder(_ context.Context, _ []acme.AuthzID, _ ...acme.OrderOption) (*acme.Order, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.order, f.authorizeErr
+}
+
+func (f *fakeACME) GetAuthorization(_ context.Context, _ string) (*acme.Authorization, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.auth, f.authzErr
+}
+
+func (f *fakeACME) Accept(_ context.Context, _ *acme.Challenge) (*acme.Challenge, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.acceptCalled = true
+	return nil, f.acceptErr
+}
+
+func (f *fakeACME) WaitAuthorization(_ context.Context, _ string) (*acme.Authorization, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return nil, f.waitErr
+}
+
+func (f *fakeACME) CreateOrderCert(_ context.Context, _ string, _ []byte, _ bool) ([][]byte, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.der, "", f.finalizeErr
+}
+
+func testLeafDER(t *testing.T, notAfter time.Time) []byte {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     notAfter,
+		DNSNames:     []string{"example.com"},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("create cert: %v", err)
+	}
+	return der
+}
+
+func newSuccessFake(t *testing.T) *fakeACME {
+	t.Helper()
+	return &fakeACME{
+		order: &acme.Order{
+			AuthzURLs:   []string{"https://acme.test/authz/1"},
+			FinalizeURL: "https://acme.test/finalize",
+		},
+		auth: &acme.Authorization{
+			URI:        "https://acme.test/authz/1",
+			Identifier: acme.AuthzID{Type: "dns", Value: "example.com"},
+			Challenges: []*acme.Challenge{{Type: "dns-01", Token: "tok"}},
+		},
+		der: [][]byte{testLeafDER(t, time.Now().Add(30*24*time.Hour))},
+	}
+}
+
+func runIssue(t *testing.T, db *mockACMEDB, fake *fakeACME) model.ACMECertificate {
+	t.Helper()
+	e := New(db, t.TempDir())
+	e.client = fake
+	e.issue(model.ACMECertificate{ID: "a1", Name: "x", Domains: []string{"example.com"}, Email: "a@b.com"})
+	return db.lastUpdate()
+}
+
+func runIssueFailure(t *testing.T, db *mockACMEDB, fake *fakeACME, wantSubstr string) model.ACMECertificate {
+	t.Helper()
+	e := New(db, t.TempDir())
+	e.client = fake
+	e.issue(model.ACMECertificate{ID: "a1", Name: "x", Domains: []string{"example.com"}, Email: "a@b.com"})
+	last := waitForACMEFailure(t, db)
+	if !strings.Contains(last.Error, wantSubstr) {
+		t.Fatalf("expected error containing %q, got %q", wantSubstr, last.Error)
+	}
+	return last
+}
+
+func TestIssueSuccess(t *testing.T) {
+	db := &mockACMEDB{}
+	fake := newSuccessFake(t)
+	last := runIssue(t, db, fake)
+
+	if last.Status != "valid" {
+		t.Fatalf("expected status valid, got %q (error=%q)", last.Status, last.Error)
+	}
+	if last.Error != "" {
+		t.Fatalf("expected no error, got %q", last.Error)
+	}
+	if last.CertPath == "" || last.KeyPath == "" {
+		t.Fatalf("expected cert/key paths, got %+v", last)
+	}
+	if _, err := os.Stat(last.CertPath); err != nil {
+		t.Fatalf("cert file missing: %v", err)
+	}
+	if _, err := os.Stat(last.KeyPath); err != nil {
+		t.Fatalf("key file missing: %v", err)
+	}
+	leaf, err := x509.ParseCertificate(fake.der[0])
+	if err != nil {
+		t.Fatalf("parse test cert: %v", err)
+	}
+	if last.ExpiresAt == nil || !last.ExpiresAt.Equal(leaf.NotAfter) {
+		t.Fatalf("expected expiry %v, got %v", leaf.NotAfter, last.ExpiresAt)
+	}
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if !fake.acceptCalled {
+		t.Fatal("expected challenge Accept to be called")
+	}
+}
+
+func TestIssueSuccessWhenAccountAlreadyExists(t *testing.T) {
+	db := &mockACMEDB{}
+	fake := newSuccessFake(t)
+	fake.registerExists = true
+	last := runIssue(t, db, fake)
+	if last.Status != "valid" {
+		t.Fatalf("expected valid despite existing account, got %q (error=%q)", last.Status, last.Error)
+	}
+}
+
+func TestIssueRegisterError(t *testing.T) {
+	fake := newSuccessFake(t)
+	fake.registerErr = errors.New("reg fail")
+	runIssueFailure(t, &mockACMEDB{}, fake, "register:")
+}
+
+func TestIssueAuthorizeError(t *testing.T) {
+	fake := newSuccessFake(t)
+	fake.authorizeErr = errors.New("order fail")
+	runIssueFailure(t, &mockACMEDB{}, fake, "authorize:")
+}
+
+func TestIssueGetAuthzError(t *testing.T) {
+	fake := newSuccessFake(t)
+	fake.authzErr = errors.New("authz fail")
+	runIssueFailure(t, &mockACMEDB{}, fake, "get authz:")
+}
+
+func TestIssueNoSupportedChallenge(t *testing.T) {
+	fake := newSuccessFake(t)
+	fake.auth = &acme.Authorization{
+		URI:        "https://acme.test/authz/1",
+		Identifier: acme.AuthzID{Type: "dns", Value: "example.com"},
+	}
+	runIssueFailure(t, &mockACMEDB{}, fake, "no supported challenge")
+}
+
+func TestIssueAcceptError(t *testing.T) {
+	fake := newSuccessFake(t)
+	fake.acceptErr = errors.New("accept fail")
+	runIssueFailure(t, &mockACMEDB{}, fake, "accept challenge:")
+}
+
+func TestIssueWaitAuthzError(t *testing.T) {
+	fake := newSuccessFake(t)
+	fake.waitErr = errors.New("wait fail")
+	runIssueFailure(t, &mockACMEDB{}, fake, "wait authz:")
+}
+
+func TestIssueFinalizeError(t *testing.T) {
+	fake := newSuccessFake(t)
+	fake.finalizeErr = errors.New("finalize fail")
+	runIssueFailure(t, &mockACMEDB{}, fake, "finalize:")
+}
+
+func TestIssueSaveKeyError(t *testing.T) {
+	db := &mockACMEDB{}
+	fake := newSuccessFake(t)
+	dir := t.TempDir()
+	// Account key must save fine (through /dev/null), while the certificate
+	// key path is a directory so the final key write fails.
+	if err := os.Symlink("/dev/null", filepath.Join(dir, "acme-account.key")); err != nil {
+		t.Fatalf("setup account symlink: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "a1.key"), 0700); err != nil {
+		t.Fatalf("setup key dir: %v", err)
+	}
+	e := New(db, dir)
+	e.client = fake
+	e.issue(model.ACMECertificate{ID: "a1", Name: "x", Domains: []string{"example.com"}, Email: "a@b.com"})
+	last := waitForACMEFailure(t, db)
+	if !strings.Contains(last.Error, "save key:") {
+		t.Fatalf("expected save key error, got %q", last.Error)
+	}
+}
+
+func TestIssueSaveCertError(t *testing.T) {
+	db := &mockACMEDB{}
+	fake := newSuccessFake(t)
+	dir := t.TempDir()
+	// Make the key write succeed via /dev/null, then make the cert path
+	// unwritable by creating a directory at that exact path.
+	if err := os.Symlink("/dev/null", filepath.Join(dir, "a1.key")); err != nil {
+		t.Fatalf("setup symlink: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "a1.crt"), 0700); err != nil {
+		t.Fatalf("setup cert dir: %v", err)
+	}
+	e := New(db, dir)
+	e.client = fake
+	e.issue(model.ACMECertificate{ID: "a1", Name: "x", Domains: []string{"example.com"}, Email: "a@b.com"})
+	last := waitForACMEFailure(t, db)
+	if !strings.Contains(last.Error, "save cert:") {
+		t.Fatalf("expected save cert error, got %q", last.Error)
+	}
+}
+
+func TestIssueUnparseableLeafUsesDefaultExpiry(t *testing.T) {
+	db := &mockACMEDB{}
+	fake := newSuccessFake(t)
+	fake.der = [][]byte{[]byte("not a certificate")}
+	last := runIssue(t, db, fake)
+	if last.Status != "valid" {
+		t.Fatalf("expected valid with default expiry, got %q (error=%q)", last.Status, last.Error)
+	}
+	if last.ExpiresAt == nil {
+		t.Fatal("expected non-nil expiry")
+	}
+	want := time.Now().Add(90 * 24 * time.Hour)
+	if diff := last.ExpiresAt.Sub(want); diff < -time.Minute || diff > time.Minute {
+		t.Fatalf("expected default 90d expiry, got %v", last.ExpiresAt)
+	}
+}
+
+func TestIssueDBUpdateErrorIgnored(t *testing.T) {
+	db := &mockACMEDB{updateErr: errors.New("db fail")}
+	fake := newSuccessFake(t)
+	e := New(db, t.TempDir())
+	e.client = fake
+	e.issue(model.ACMECertificate{ID: "a1", Name: "x", Domains: []string{"example.com"}, Email: "a@b.com"})
+	if got := db.lastUpdate(); got.ID != "" {
+		t.Fatalf("expected no DB update on error, got %+v", got)
+	}
+}
+
+func TestAutoRenewLoopTicker(t *testing.T) {
+	t.Setenv("NB_ACME_DIR", "http://127.0.0.1:1/dir")
+	soon := time.Now().Add(24 * time.Hour)
+	db := &mockACMEDB{certs: []model.ACMECertificate{{
+		ID: "due", AutoRenew: true, Status: "valid", ExpiresAt: &soon, RenewDays: 30,
+		Domains: []string{"example.com"}, Email: "a@b.com",
+	}}}
+	fake := &fakeACME{registerErr: errors.New("renew fail")}
+	e := New(db, t.TempDir())
+	e.client = fake
+	e.renewInterval = 30 * time.Millisecond
+	go e.autoRenewLoop()
+	defer e.Stop()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if c := db.lastUpdate(); c.Status == "error" {
+			if c.ID != "due" {
+				t.Fatalf("expected renewal attempt for 'due', got %+v", c)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for auto-renew attempt")
 }

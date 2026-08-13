@@ -28,9 +28,23 @@ type Engine struct {
 		GetCertificates() ([]model.ACMECertificate, error)
 		UpdateCertificate(cert model.ACMECertificate) error
 	}
-	certDir string
-	stopCh  chan struct{}
-	acmeDir string // Let's Encrypt directory URL
+	certDir       string
+	stopCh        chan struct{}
+	acmeDir       string        // Let's Encrypt directory URL
+	renewInterval time.Duration // auto-renew check interval
+	client        acmeClient    // injected in tests; nil uses the real ACME client
+}
+
+// acmeClient is the subset of golang.org/x/crypto/acme.Client used by the
+// issuance flow. Keeping it behind an interface lets tests exercise the full
+// order/challenge/finalize path without a real ACME server.
+type acmeClient interface {
+	Register(ctx context.Context, acct *acme.Account, prompt func(tosURL string) bool) (*acme.Account, error)
+	AuthorizeOrder(ctx context.Context, id []acme.AuthzID, opt ...acme.OrderOption) (*acme.Order, error)
+	GetAuthorization(ctx context.Context, url string) (*acme.Authorization, error)
+	Accept(ctx context.Context, chal *acme.Challenge) (*acme.Challenge, error)
+	WaitAuthorization(ctx context.Context, url string) (*acme.Authorization, error)
+	CreateOrderCert(ctx context.Context, url string, csr []byte, bundle bool) (der [][]byte, certURL string, err error)
 }
 
 func New(db interface {
@@ -42,10 +56,11 @@ func New(db interface {
 		dir = v
 	}
 	return &Engine{
-		db:      db,
-		certDir: certDir,
-		stopCh:  make(chan struct{}),
-		acmeDir: dir,
+		db:            db,
+		certDir:       certDir,
+		stopCh:        make(chan struct{}),
+		acmeDir:       dir,
+		renewInterval: 12 * time.Hour,
 	}
 }
 
@@ -82,9 +97,12 @@ func (e *Engine) issue(cert model.ACMECertificate) {
 		return
 	}
 
-	client := &acme.Client{
-		Key:          accountKey,
-		DirectoryURL: e.acmeDir,
+	var client acmeClient = e.client
+	if client == nil {
+		client = &acme.Client{
+			Key:          accountKey,
+			DirectoryURL: e.acmeDir,
+		}
 	}
 
 	// Register account
@@ -203,7 +221,7 @@ func (e *Engine) fail(cert model.ACMECertificate, msg string) {
 }
 
 func (e *Engine) autoRenewLoop() {
-	ticker := time.NewTicker(12 * time.Hour)
+	ticker := time.NewTicker(e.renewInterval)
 	defer ticker.Stop()
 	for {
 		select {
