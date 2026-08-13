@@ -44,9 +44,11 @@ type stunHeader struct {
 }
 
 type Engine struct {
-	mu       sync.RWMutex
-	tunnels  map[string]*tunnelState
-	db       interface{ GetTunnels() ([]model.STUNTunnel, error) }
+	mu      sync.RWMutex
+	tunnels map[string]*tunnelState
+	db      interface {
+		GetTunnels() ([]model.STUNTunnel, error)
+	}
 	notifier func(eventType, data string) // event bus callback
 	stopCh   chan struct{}
 }
@@ -192,6 +194,7 @@ func (e *Engine) DetectNAT(stunServer string) (int, *net.UDPAddr, error) {
 // ctx controls timeout via the deadline set on the connection.
 func stunBind(conn *net.UDPConn, server *net.UDPAddr, timeout time.Duration) (*net.UDPAddr, error) {
 	req := buildBindingRequest()
+	tid := reqTID(req)
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if _, err := conn.WriteTo(req, server); err != nil {
@@ -221,26 +224,49 @@ func stunBind(conn *net.UDPConn, server *net.UDPAddr, timeout time.Duration) (*n
 			continue
 		}
 
+		// RFC 5389 §7.2.2: the response must come from the server address we
+		// contacted, carry our transaction ID, and have a coherent length.
+		if !remote.IP.Equal(server.IP) || remote.Port != server.Port {
+			continue
+		}
 		hdr := parseHeader(buf[:n])
 		if hdr == nil || hdr.MagicCookie != stunMagicCookie {
 			continue
 		}
-		if hdr.Type == bindingError {
-				_, errCode, alt := parseAttributes(buf[20:n])
-				msg := fmt.Sprintf("STUN error from %v", remote)
-				if errCode != nil { msg = errCode.Error() }
-				if alt != nil { msg += fmt.Sprintf(" (alternate: %s)", alt) }
-			return nil, fmt.Errorf("%s", msg)
+		if hdr.TransID != tid {
+			continue
 		}
-		if hdr.Type != bindingResponse {
+		msgLen := int(hdr.Length)
+		if n < 20+msgLen {
+			continue
+		}
+		pkt := buf[:20+msgLen]
+		if !validFingerprint(pkt) {
+			continue
+		}
+		body := pkt[20:]
+
+		switch hdr.Type {
+		case bindingError:
+			_, errCode, alt := parseAttributes(body, tid)
+			msg := fmt.Sprintf("STUN error from %v", remote)
+			if errCode != nil {
+				msg = errCode.Error()
+			}
+			if alt != nil {
+				msg += fmt.Sprintf(" (alternate: %s)", alt)
+			}
+			return nil, fmt.Errorf("%s", msg)
+		case bindingResponse:
+			addr, _, _ := parseAttributes(body, tid)
+			if addr == nil {
+				return nil, fmt.Errorf("no mapped address in response")
+			}
+			return addr, nil
+		default:
 			continue
 		}
 
-		addr, _, _ := parseAttributes(buf[20:n])
-		if addr == nil {
-			return nil, fmt.Errorf("no mapped address in response")
-		}
-		return addr, nil
 	}
 
 	return nil, fmt.Errorf("all %d attempts failed", maxRetries)
@@ -341,7 +367,9 @@ func (e *Engine) ProbeMultiple(servers []string) *MultiProbeResult {
 			// Per-server retry loop
 			for attempt := 0; attempt < 3; attempt++ {
 				natType, addr, err = e.DetectNAT(server)
-				if err == nil { break }
+				if err == nil {
+					break
+				}
 				time.Sleep(time.Duration(attempt+1) * 500 * time.Millisecond)
 			}
 			ch <- probeOut{server, natType, addr, err}
@@ -353,7 +381,9 @@ func (e *Engine) ProbeMultiple(servers []string) *MultiProbeResult {
 	for range servers {
 		p := <-ch
 		sp := ServerProbe{Server: p.server, NatType: p.natType}
-		if p.err != nil { sp.Error = p.err.Error() }
+		if p.err != nil {
+			sp.Error = p.err.Error()
+		}
 		if p.addr != nil {
 			sp.MappedIP = p.addr.IP.String()
 			sp.Port = p.addr.Port
@@ -363,16 +393,31 @@ func (e *Engine) ProbeMultiple(servers []string) *MultiProbeResult {
 		result.ServerResults = append(result.ServerResults, sp)
 	}
 	for ip, c := range ipCount {
-		if c > len(servers)/2 { result.ConsensusIP = ip; break }
+		if c > len(servers)/2 {
+			result.ConsensusIP = ip
+			break
+		}
 	}
 	for port, c := range portCount {
-		if c > len(servers)/2 { result.ConsensusPort = port; break }
+		if c > len(servers)/2 {
+			result.ConsensusPort = port
+			break
+		}
 	}
 	firstIP, firstPort := "", 0
 	for _, s := range result.ServerResults {
-		if s.Error != "" { continue }
-		if firstIP == "" { firstIP = s.MappedIP; firstPort = s.Port; continue }
-		if s.MappedIP != firstIP || s.Port != firstPort { result.Inconsistent = true; break }
+		if s.Error != "" {
+			continue
+		}
+		if firstIP == "" {
+			firstIP = s.MappedIP
+			firstPort = s.Port
+			continue
+		}
+		if s.MappedIP != firstIP || s.Port != firstPort {
+			result.Inconsistent = true
+			break
+		}
 	}
 	logger.Log.Info().Int("servers", len(servers)).Str("consensus", fmt.Sprintf("%s:%d", result.ConsensusIP, result.ConsensusPort)).Bool("inconsistent", result.Inconsistent).Msg("multi-stun probe complete")
 
@@ -403,78 +448,60 @@ func parseHeader(data []byte) *stunHeader {
 	return h
 }
 
-func parseMappedAddress(data []byte) *net.UDPAddr {
-	pos := 0
-	for pos+4 <= len(data) {
-		attrType := binary.BigEndian.Uint16(data[pos:])
-		attrLen := binary.BigEndian.Uint16(data[pos+2:])
-		pos += 4
-		if pos+int(attrLen) > len(data) {
-			break
-		}
-		if attrType == 0x0001 || attrType == 0x0020 {
-			if attrLen >= 8 && data[pos+1] == 0x01 {
-				port := int(binary.BigEndian.Uint16(data[pos+2:])) ^ (int(stunMagicCookie>>16) & 0xFFFF)
-				a, b, c, d := data[pos+4], data[pos+5], data[pos+6], data[pos+7]
-				if attrType == 0x0020 {
-					m := uint32(stunMagicCookie)
-					a ^= byte(m >> 24)
-					b ^= byte(m >> 16)
-					c ^= byte(m >> 8)
-					d ^= byte(m)
-				}
-				ip := net.IPv4(a, b, c, d)
-				return &net.UDPAddr{IP: ip.To4(), Port: port}
-			}
-		}
-		pos += int(attrLen)
-		if pos%4 != 0 {
-			pos += 4 - pos%4
-		}
-	}
-	return nil
-}
-
 // reqTID extracts the 12-byte transaction ID from a STUN request packet.
 func reqTID(req []byte) [12]byte { var tid [12]byte; copy(tid[:], req[8:20]); return tid }
 
 // SymmetricNATAnalysis holds port delta analysis for symmetric NAT.
 type SymmetricNATAnalysis struct {
-	Ports      []int `json:"ports"`      // mapped ports observed
-	MinDelta   int   `json:"min_delta"`  // smallest port delta
-	MaxDelta   int   `json:"max_delta"`  // largest port delta
-	AvgDelta   float64 `json:"avg_delta"` // average delta
-	IsRandom   bool  `json:"is_random"`  // true if deltas appear random
-	Prediction int   `json:"prediction"` // predicted next port
+	Ports      []int   `json:"ports"`      // mapped ports observed
+	MinDelta   int     `json:"min_delta"`  // smallest port delta
+	MaxDelta   int     `json:"max_delta"`  // largest port delta
+	AvgDelta   float64 `json:"avg_delta"`  // average delta
+	IsRandom   bool    `json:"is_random"`  // true if deltas appear random
+	Prediction int     `json:"prediction"` // predicted next port
 }
 
 // AnalyzeSymmetricNAT probes the STUN server N times and analyzes port delta patterns.
 // Essential for hole punching — knowing the delta enables port prediction.
 func (e *Engine) AnalyzeSymmetricNAT(stunServer string, probes int) (*SymmetricNATAnalysis, error) {
-	if stunServer == "" { stunServer = "stun.l.google.com:19302" }
-	if probes < 3 { probes = 5 }
+	if stunServer == "" {
+		stunServer = "stun.l.google.com:19302"
+	}
+	if probes < 3 {
+		probes = 5
+	}
 
 	serverAddr, err := net.ResolveUDPAddr("udp", stunServer)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	ports := make([]int, 0, probes)
 	for i := 0; i < probes; i++ {
 		conn, err := net.ListenUDP("udp", nil)
-		if err != nil { continue }
+		if err != nil {
+			continue
+		}
 		addr, err := stunBind(conn, serverAddr, stunTimeout)
 		conn.Close()
-		if err != nil { continue }
+		if err != nil {
+			continue
+		}
 		ports = append(ports, addr.Port)
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	if len(ports) < 2 { return nil, fmt.Errorf("insufficient probes: %d", len(ports)) }
+	if len(ports) < 2 {
+		return nil, fmt.Errorf("insufficient probes: %d", len(ports))
+	}
 
 	analysis := &SymmetricNATAnalysis{Ports: ports}
 	deltas := make([]int, 0, len(ports)-1)
 	for i := 1; i < len(ports); i++ {
 		d := ports[i] - ports[i-1]
-		if d < 0 { d = -d }
+		if d < 0 {
+			d = -d
+		}
 		deltas = append(deltas, d)
 	}
 	if len(deltas) > 0 {
@@ -483,8 +510,12 @@ func (e *Engine) AnalyzeSymmetricNAT(stunServer string, probes int) (*SymmetricN
 		sum := 0
 		for _, d := range deltas {
 			sum += d
-			if d < analysis.MinDelta { analysis.MinDelta = d }
-			if d > analysis.MaxDelta { analysis.MaxDelta = d }
+			if d < analysis.MinDelta {
+				analysis.MinDelta = d
+			}
+			if d > analysis.MaxDelta {
+				analysis.MaxDelta = d
+			}
 		}
 		analysis.AvgDelta = float64(sum) / float64(len(deltas))
 		analysis.IsRandom = analysis.MaxDelta-analysis.MinDelta > 1000

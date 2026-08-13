@@ -15,12 +15,12 @@ import (
 
 // HolePunchResult holds the outcome of a P2P hole punch attempt.
 type HolePunchResult struct {
-	Success    bool     `json:"success"`
-	LocalPort  int      `json:"local_port"`
-	RemotePort int      `json:"remote_port"`
-	Attempts   int      `json:"attempts"`
-	Method     string   `json:"method"` // "delta_predict", "birthday"
-	ProbedPorts []int   `json:"probed_ports,omitempty"`
+	Success     bool   `json:"success"`
+	LocalPort   int    `json:"local_port"`
+	RemotePort  int    `json:"remote_port"`
+	Attempts    int    `json:"attempts"`
+	Method      string `json:"method"` // "delta_predict", "birthday"
+	ProbedPorts []int  `json:"probed_ports,omitempty"`
 }
 
 // HolePunch attempts P2P UDP hole punching using port delta prediction.
@@ -37,7 +37,9 @@ func HolePunch(localIP string, localPort int, remoteIP string, analysis *Symmetr
 func deltaPunch(localIP string, localPort int, remoteIP string, analysis *SymmetricNATAnalysis) (*HolePunchResult, error) {
 	result := &HolePunchResult{LocalPort: localPort, Method: "delta_predict"}
 	predicted := analysis.Prediction
-	if predicted < 1024 || predicted > 65535 { predicted = 20000 + localPort%40000 }
+	if predicted < 1024 || predicted > 65535 {
+		predicted = 20000 + localPort%40000
+	}
 
 	// Candidate ports: predicted, ±delta, ±2*delta
 	candidates := []int{predicted}
@@ -48,17 +50,20 @@ func deltaPunch(localIP string, localPort int, remoteIP string, analysis *Symmet
 	result.ProbedPorts = make([]int, 0, len(candidates))
 
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP(localIP), Port: localPort})
-	if err != nil { return nil, fmt.Errorf("local listen: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("local listen: %w", err)
+	}
 	defer conn.Close()
 
-	punch := make([]byte, 4)
-	copy(punch, []byte("PUNCH"))
+	punch := []byte("PUNCH")
 	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 
 	var wg sync.WaitGroup
 
 	for _, port := range candidates {
-		if port < 1 || port > 65535 { continue }
+		if port < 1 || port > 65535 {
+			continue
+		}
 		result.ProbedPorts = append(result.ProbedPorts, port)
 		result.RemotePort = port
 		remoteAddr := &net.UDPAddr{IP: net.ParseIP(remoteIP), Port: port}
@@ -95,11 +100,12 @@ func birthdayPunch(localIP string, localPort int, remoteIP string) (*HolePunchRe
 	const burstSize = 64 // sqrt of ephemeral port range
 
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP(localIP), Port: localPort})
-	if err != nil { return nil, fmt.Errorf("local listen: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("local listen: %w", err)
+	}
 	defer conn.Close()
 
-	punch := make([]byte, 4)
-	copy(punch, []byte("PUNCH"))
+	punch := []byte("PUNCH")
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 
 	startPort := 20000 + (localPort % 40000)
@@ -107,7 +113,9 @@ func birthdayPunch(localIP string, localPort int, remoteIP string) (*HolePunchRe
 
 	for i := 0; i < burstSize; i++ {
 		port := startPort + i*11 // stepped probing
-		if port > 65535 { break }
+		if port > 65535 {
+			break
+		}
 		remoteAddr := &net.UDPAddr{IP: net.ParseIP(remoteIP), Port: port}
 		result.ProbedPorts = append(result.ProbedPorts, port)
 		wg.Add(1)

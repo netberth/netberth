@@ -115,7 +115,7 @@ export function Settings() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p>Version: <span className="text-foreground font-mono">1.3.0</span></p>
+              <p>Version: <span className="text-foreground font-mono">{__APP_VERSION__}</span></p>
               <p>NetBerth is a security-first network service management platform.
                  Port forwarding, reverse proxy, DDNS, STUN, WOL, cron, ACME, and storage — all in one.</p>
             </div>

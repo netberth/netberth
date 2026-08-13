@@ -16,6 +16,30 @@ All notable changes to NetBerth are documented here. Versioning follows
 - README/Quick Start refreshed for v1.3: screenshots, Webhook & trusted-proxy
   documentation, one-command container run.
 
+## [1.3.1] - 2026-08-13
+
+### Fixed
+
+- STUN RFC 5389 compliance: MAPPED-ADDRESS / ALTERNATE-SERVER now use plain
+  encoding (previously XORed by mistake); IPv6 XOR-MAPPED-ADDRESS decodes with
+  cookie ‖ transaction ID; FINGERPRINT CRC-32 validated and required to be the
+  last attribute; responses are bound to the server source and transaction ID;
+  fixed hole-punch packets being truncated from `PUNCH` to 4 bytes.
+- ACME hardening: per-step timeouts (30s steps, 10min authorization wait);
+  idempotent `Stop()`; corrupt or unreadable account key fails loudly instead
+  of silently regenerating; key files normalized to 0600.
+
+### Changed
+
+- New shared constant-time HMAC helpers in `pkg/security`; webhook signatures
+  and CSRF tokens now use them (identical wire format).
+
+### Tests
+
+- acme 51% → 93.3% (full issuance success/error paths); websocket 69% →
+  97.8% (broadcast, concurrency, abnormal disconnect); stun 80.9% (RFC 5389
+  attributes, fingerprint, anti-spoofing); `pkg/security` 100%.
+
 ## [1.3.0] - 2026-08-12
 
 ### Added

@@ -53,7 +53,7 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="absolute bottom-0 left-0 right-0 border-t border-border p-3">
-        <div className="text-xs text-muted-foreground">NetBerth v1.3.0</div>
+        <div className="text-xs text-muted-foreground">NetBerth v{__APP_VERSION__}</div>
       </div>
     </aside>
   )

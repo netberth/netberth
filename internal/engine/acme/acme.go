@@ -12,6 +12,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -22,9 +23,15 @@ import (
 	"golang.org/x/crypto/acme"
 )
 
+const (
+	acmeStepTimeout  = 30 * time.Second // register/order/authorization steps
+	acmeAuthzTimeout = 10 * time.Minute // challenge propagation + validation
+)
+
 type Engine struct {
-	mu sync.RWMutex
-	db interface {
+	mu       sync.RWMutex
+	stopOnce sync.Once
+	db       interface {
 		GetCertificates() ([]model.ACMECertificate, error)
 		UpdateCertificate(cert model.ACMECertificate) error
 	}
@@ -65,7 +72,9 @@ func New(db interface {
 }
 
 func (e *Engine) Start() error {
-	os.MkdirAll(e.certDir, 0700)
+	if err := os.MkdirAll(e.certDir, 0700); err != nil {
+		return fmt.Errorf("create cert dir: %w", err)
+	}
 	certs, err := e.db.GetCertificates()
 	if err != nil {
 		return err
@@ -79,7 +88,11 @@ func (e *Engine) Start() error {
 	return nil
 }
 
-func (e *Engine) Stop() { close(e.stopCh) }
+// Stop shuts down the background renewal loop. It is safe to call multiple
+// times (the renewal loop is only ever closed once).
+func (e *Engine) Stop() {
+	e.stopOnce.Do(func() { close(e.stopCh) })
+}
 
 func (e *Engine) Issue(cert model.ACMECertificate) { go e.issue(cert) }
 
@@ -107,7 +120,9 @@ func (e *Engine) issue(cert model.ACMECertificate) {
 
 	// Register account
 	acct := &acme.Account{Contact: []string{"mailto:" + cert.Email}}
-	if _, err := client.Register(context.Background(), acct, acme.AcceptTOS); err != nil {
+	regCtx, regCancel := context.WithTimeout(context.Background(), acmeStepTimeout)
+	defer regCancel()
+	if _, err := client.Register(regCtx, acct, acme.AcceptTOS); err != nil {
 		if err != acme.ErrAccountAlreadyExists {
 			e.fail(cert, "register: "+err.Error())
 			return
@@ -127,7 +142,9 @@ func (e *Engine) issue(cert model.ACMECertificate) {
 		orderAuthz = append(orderAuthz, acme.AuthzID{Type: "dns", Value: d})
 	}
 
-	order, err := client.AuthorizeOrder(context.Background(), orderAuthz)
+	orderCtx, orderCancel := context.WithTimeout(context.Background(), acmeStepTimeout)
+	defer orderCancel()
+	order, err := client.AuthorizeOrder(orderCtx, orderAuthz)
 	if err != nil {
 		e.fail(cert, "authorize: "+err.Error())
 		return
@@ -135,7 +152,9 @@ func (e *Engine) issue(cert model.ACMECertificate) {
 
 	// Solve challenges — one authorization per domain
 	for _, authzURL := range order.AuthzURLs {
-		auth, err := client.GetAuthorization(context.Background(), authzURL)
+		authCtx, authCancel := context.WithTimeout(context.Background(), acmeStepTimeout)
+		auth, err := client.GetAuthorization(authCtx, authzURL)
+		authCancel()
 		if err != nil {
 			e.fail(cert, "get authz: "+err.Error())
 			return
@@ -149,12 +168,18 @@ func (e *Engine) issue(cert model.ACMECertificate) {
 			e.fail(cert, "solve challenge: "+err.Error())
 			return
 		}
-		if _, err := client.Accept(context.Background(), chal); err != nil {
-			e.fail(cert, "accept challenge: "+err.Error())
+		acceptCtx, acceptCancel := context.WithTimeout(context.Background(), acmeStepTimeout)
+		_, acceptErr := client.Accept(acceptCtx, chal)
+		acceptCancel()
+		if acceptErr != nil {
+			e.fail(cert, "accept challenge: "+acceptErr.Error())
 			return
 		}
-		if _, err := client.WaitAuthorization(context.Background(), auth.URI); err != nil {
-			e.fail(cert, "wait authz: "+err.Error())
+		waitCtx, waitCancel := context.WithTimeout(context.Background(), acmeAuthzTimeout)
+		_, waitErr := client.WaitAuthorization(waitCtx, auth.URI)
+		waitCancel()
+		if waitErr != nil {
+			e.fail(cert, "wait authz: "+waitErr.Error())
 			return
 		}
 	}
@@ -167,7 +192,9 @@ func (e *Engine) issue(cert model.ACMECertificate) {
 	}
 
 	// Finalize order
-	derChain, _, err := client.CreateOrderCert(context.Background(), order.FinalizeURL, csr, true)
+	finalCtx, finalCancel := context.WithTimeout(context.Background(), acmeStepTimeout)
+	derChain, _, err := client.CreateOrderCert(finalCtx, order.FinalizeURL, csr, true)
+	finalCancel()
 	if err != nil {
 		e.fail(cert, "finalize: "+err.Error())
 		return
@@ -228,7 +255,11 @@ func (e *Engine) autoRenewLoop() {
 		case <-e.stopCh:
 			return
 		case <-ticker.C:
-			certs, _ := e.db.GetCertificates()
+			certs, err := e.db.GetCertificates()
+			if err != nil {
+				logger.Log.Error().Err(err).Msg("ACME auto-renew: failed to list certificates")
+				continue
+			}
 			for _, cert := range e.renewDue(certs) {
 				go e.renew(cert)
 			}
@@ -254,9 +285,17 @@ func (e *Engine) loadOrCreateAccountKey() (crypto.Signer, error) {
 	data, err := os.ReadFile(path)
 	if err == nil {
 		block, _ := pem.Decode(data)
-		if block != nil {
-			return x509.ParseECPrivateKey(block.Bytes)
+		if block == nil {
+			return nil, fmt.Errorf("invalid account key file %s: no PEM block", path)
 		}
+		key, err := x509.ParseECPrivateKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("invalid account key file %s: %w", path, err)
+		}
+		return key, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("read account key: %w", err)
 	}
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -302,5 +341,10 @@ func certRequest(key crypto.Signer, domains []string) ([]byte, error) {
 
 func savePEMKey(path string, key *ecdsa.PrivateKey) error {
 	der, _ := x509.MarshalECPrivateKey(key)
-	return os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}), 0600)
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}), 0600); err != nil {
+		return err
+	}
+	// WriteFile keeps the mode of an existing file; normalize it so an
+	// accidentally permissive key never stays readable.
+	return os.Chmod(path, 0600)
 }

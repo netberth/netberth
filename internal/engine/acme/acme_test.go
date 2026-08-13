@@ -10,6 +10,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"math/big"
 	"os"
@@ -416,16 +417,16 @@ func TestIssueSaveKeyError(t *testing.T) {
 	db := &mockACMEDB{}
 	fake := newSuccessFake(t)
 	dir := t.TempDir()
-	// Account key must save fine (through /dev/null), while the certificate
-	// key path is a directory so the final key write fails.
-	if err := os.Symlink("/dev/null", filepath.Join(dir, "acme-account.key")); err != nil {
-		t.Fatalf("setup account symlink: %v", err)
+	// Create a valid account key, then make the certificate key path a
+	// directory so only the final key write fails.
+	e := New(db, dir)
+	e.client = fake
+	if _, err := e.loadOrCreateAccountKey(); err != nil {
+		t.Fatalf("setup account key: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "a1.key"), 0700); err != nil {
 		t.Fatalf("setup key dir: %v", err)
 	}
-	e := New(db, dir)
-	e.client = fake
 	e.issue(model.ACMECertificate{ID: "a1", Name: "x", Domains: []string{"example.com"}, Email: "a@b.com"})
 	last := waitForACMEFailure(t, db)
 	if !strings.Contains(last.Error, "save key:") {
@@ -437,10 +438,11 @@ func TestIssueSaveCertError(t *testing.T) {
 	db := &mockACMEDB{}
 	fake := newSuccessFake(t)
 	dir := t.TempDir()
-	// Make the key write succeed via /dev/null, then make the cert path
-	// unwritable by creating a directory at that exact path.
-	if err := os.Symlink("/dev/null", filepath.Join(dir, "a1.key")); err != nil {
-		t.Fatalf("setup symlink: %v", err)
+	// Key path is a pre-existing regular file (save normalizes it to 0600
+	// and succeeds), while the cert path is a directory so the cert write
+	// fails.
+	if err := os.WriteFile(filepath.Join(dir, "a1.key"), []byte("old"), 0644); err != nil {
+		t.Fatalf("setup key file: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "a1.crt"), 0700); err != nil {
 		t.Fatalf("setup cert dir: %v", err)
@@ -507,4 +509,56 @@ func TestAutoRenewLoopTicker(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("timed out waiting for auto-renew attempt")
+}
+
+func TestStopIsIdempotent(t *testing.T) {
+	e := New(&mockACMEDB{}, t.TempDir())
+	e.Stop()
+	e.Stop() // must not panic
+}
+
+func TestStartMkdirAllError(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(dir, []byte("file"), 0600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	e := New(&mockACMEDB{}, dir)
+	if err := e.Start(); err == nil {
+		t.Fatal("expected error when cert dir cannot be created")
+	}
+}
+
+func TestLoadOrCreateAccountKeyCorrupt(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "acme-account.key")
+
+	t.Run("no pem block", func(t *testing.T) {
+		if err := os.WriteFile(path, []byte("garbage"), 0600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		e := New(&mockACMEDB{}, dir)
+		if _, err := e.loadOrCreateAccountKey(); err == nil {
+			t.Fatal("expected error for key file without PEM block")
+		}
+	})
+
+	t.Run("invalid ec key", func(t *testing.T) {
+		block := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: []byte("not a valid der")})
+		if err := os.WriteFile(path, block, 0600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		e := New(&mockACMEDB{}, dir)
+		if _, err := e.loadOrCreateAccountKey(); err == nil {
+			t.Fatal("expected error for invalid EC key")
+		}
+	})
+}
+
+func TestAutoRenewLoopDBErrorContinues(t *testing.T) {
+	db := &mockACMEDB{err: errors.New("db down")}
+	e := New(db, t.TempDir())
+	e.renewInterval = 20 * time.Millisecond
+	go e.autoRenewLoop()
+	time.Sleep(80 * time.Millisecond) // several ticks must not panic
+	e.Stop()
 }

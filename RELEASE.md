@@ -2,7 +2,17 @@
 
 ## Current Release
 
-**v1.3.0** (2026-08-12) — Reliability & Notifications
+**v1.3.1** (2026-08-13) — STUN/ACME hardening
+
+- STUN RFC 5389 compliance: MAPPED-ADDRESS / ALTERNATE-SERVER plain encoding,
+  IPv6 XOR-MAPPED-ADDRESS, FINGERPRINT CRC-32 validation, response source and
+  transaction-ID binding, hole-punch packet truncation fix
+- ACME hardening: per-step timeouts, idempotent Stop, corrupt account key fails
+  loudly, key files normalized to 0600
+- Shared constant-time HMAC helpers (`pkg/security`) used by webhooks and CSRF
+- Test coverage: acme 93.3%, websocket 97.8%, stun 80.9%, pkg/security 100%
+
+Previous release: **v1.3.0** (2026-08-12) — Reliability & Notifications
 
 - Webhook notifications: `/api/v1/webhooks` CRUD + test endpoint, admin UI,
   HMAC-SHA256 signatures, retries/backoff, bounded queue, event filtering
@@ -15,7 +25,7 @@
 - All prior v1.2.0 hardening: doctor, refresh-token revocation, schema
   versioning, `/api/v1/system/metrics`, HSTS, Go 1.26 + security upgrades
 
-Previous release: **v1.1.0** — TLS panel, multi-user management, audit dashboard, PostgreSQL
+Earlier: **v1.1.0** — TLS panel, multi-user management, audit dashboard, PostgreSQL
 
 ## Container Images
 
@@ -26,6 +36,7 @@ The package is public: anyone can pull without authentication.
 
 ```bash
 docker pull ghcr.io/netberth/netberth:latest
+docker pull ghcr.io/netberth/netberth:v1.3.1
 docker pull ghcr.io/netberth/netberth:v1.3.0
 ```
 

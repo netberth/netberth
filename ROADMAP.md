@@ -77,6 +77,16 @@
 - [ ] Admin panel i18n (中文/English)
 - [ ] Backup encryption (age/AES-GCM)
 
+## v1.3.1 ✅ (released 2026-08-13)
+
+- [x] STUN RFC 5389 合规修复：MAPPED-ADDRESS/ALTERNATE-SERVER 明文编码、IPv6
+  XOR-MAPPED-ADDRESS、FINGERPRINT CRC-32 校验、响应源/事务 ID 反伪造、hole punch
+  `PUNCH` 截断 bug
+- [x] ACME 加固：每步超时、`Stop()` 幂等、损坏账户密钥失败退出、密钥 0600 归一化
+- [x] HMAC 收敛：`pkg/security` 常量时间助手统一 webhook/CSRF 签名
+- [x] 覆盖率：acme 93.3% / stun 80.9% / security 100% / websocket 97.8%；
+  vet/构建/全量短测/企业测试/race 全绿
+
 ## v1.4 Planned（待用户反馈后再排）
 
 - [ ] P2P UDP hole punching with delta prediction

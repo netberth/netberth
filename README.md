@@ -4,9 +4,9 @@
 
 Self-hosted NAT traversal & networking toolbox for NAS and homelab. Port forwarding, reverse proxy, DDNS, STUN NAT traversal, Wake-on-LAN, cron scheduling, ACME certificate management, and network storage — all in one binary.
 
-**v1.3.0** adds webhook notifications, trusted-proxy protection, per-IP brute-force
-lockout and request hardening — plus a reproducible QA devil-test harness. Deployable
-via Docker in 30 seconds.
+**v1.3.1** adds RFC 5389 STUN compliance fixes, hardened ACME issuance and shared
+constant-time HMAC signing; **v1.3.0** introduced webhook notifications, trusted-proxy
+protection and per-IP brute-force lockout. Deployable via Docker in 30 seconds.
 
 ## Screenshots
 

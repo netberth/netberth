@@ -7,10 +7,7 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -20,6 +17,7 @@ import (
 
 	"github.com/netberth/netberth/internal/model"
 	"github.com/netberth/netberth/pkg/logger"
+	"github.com/netberth/netberth/pkg/security"
 )
 
 const (
@@ -217,9 +215,7 @@ func signWebhook(req *http.Request, secret string, body []byte) {
 	if secret == "" {
 		return
 	}
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(body)
-	req.Header.Set("X-NetBerth-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+	req.Header.Set("X-NetBerth-Signature", "sha256="+security.SignHMACSHA256(secret, body))
 }
 
 func resourceFromEvent(t EventType) string {

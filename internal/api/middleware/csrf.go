@@ -5,13 +5,12 @@
 package middleware
 
 import (
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"net/http"
 	"strings"
+
+	"github.com/netberth/netberth/pkg/security"
 )
 
 var csrfSecret = generateCSRFSecret()
@@ -25,10 +24,7 @@ func generateCSRFSecret() []byte {
 func CSRFToken() string {
 	b := make([]byte, 32)
 	rand.Read(b)
-	mac := hmac.New(sha256.New, csrfSecret)
-	mac.Write(b)
-	sig := hex.EncodeToString(mac.Sum(nil))
-	return base64.RawURLEncoding.EncodeToString(b) + "." + sig
+	return base64.RawURLEncoding.EncodeToString(b) + "." + security.SignHMACSHA256(string(csrfSecret), b)
 }
 
 func ValidateCSRFToken(token string) bool {
@@ -40,13 +36,7 @@ func ValidateCSRFToken(token string) bool {
 	if err != nil {
 		return false
 	}
-	sig, err := hex.DecodeString(parts[1])
-	if err != nil {
-		return false
-	}
-	mac := hmac.New(sha256.New, csrfSecret)
-	mac.Write(data)
-	return hmac.Equal(mac.Sum(nil), sig)
+	return security.VerifyHMACSHA256(string(csrfSecret), data, parts[1])
 }
 
 func CSRFMiddleware(next http.Handler) http.Handler {
