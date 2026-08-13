@@ -1,7 +1,7 @@
-FROM node:20-alpine AS web-builder
+FROM node:22-alpine AS web-builder
 WORKDIR /web
-COPY web/package.json ./
-RUN npm install
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
@@ -13,7 +13,7 @@ RUN mkdir -p internal/api/handler/webroot
 COPY --from=web-builder /dist/web/ internal/api/handler/webroot/
 RUN CGO_ENABLED=1 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o netberth ./cmd/netberth
 
-FROM alpine:3.20
+FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata sqlite-libs curl openssl
 WORKDIR /app
 COPY --from=go-builder /src/netberth .

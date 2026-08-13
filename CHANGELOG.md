@@ -3,6 +3,16 @@
 All notable changes to NetBerth are documented here. Versioning follows
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Container images published to GitHub Container Registry
+  (`ghcr.io/netberth/netberth`), multi-arch linux/amd64 + linux/arm64 — no
+  Docker Hub secrets required.
+- README/Quick Start refreshed for v1.3: screenshots, Webhook & trusted-proxy
+  documentation, one-command container run.
+
 ## [1.3.0] - 2026-08-12
 
 ### Added

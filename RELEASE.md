@@ -17,6 +17,19 @@
 
 Previous release: **v1.1.0** — TLS panel, multi-user management, audit dashboard, PostgreSQL
 
+## Container Images
+
+Multi-arch images (linux/amd64, linux/arm64) are published to **GitHub Container
+Registry** automatically by CI — no Docker Hub secrets required:
+
+```bash
+docker pull ghcr.io/netberth/netberth:latest
+docker pull ghcr.io/netberth/netberth:v1.3.0
+```
+
+Docker Hub publishing stays manual-only (`workflow_dispatch`) until
+`DOCKER_USERNAME` / `DOCKER_PASSWORD` secrets are configured.
+
 ## Building a Release
 
 ```bash

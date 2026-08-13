@@ -59,24 +59,25 @@
 - [x] Multi-user management in UI（用户 CRUD/角色/禁用/重置密码，2026-08-11）
 - [x] Audit log dashboard（分页/过滤查询 API + 前端页面，2026-08-11）
 - [x] PostgreSQL support (multi-replica) — M1-M3 完成（docs/postgresql-support.md）；真实库集成验证由 `NB_TEST_POSTGRES_DSN` 门控
-## v1.2 — Stability & Usability（代码完成；Draft Release 已建待审阅）
+## v1.2 ✅（已并入 v1.3.0 发布）
 
 - [x] M1 可靠性地基：迁移版本化（schema_migrations）+ SQLite 迁移前备份、refresh token 吊销/轮换/登出/改密吊销
 - [x] M2 用户第一公里：`netberth doctor` 自检命令、首次运行体验
 - [x] M3 可观测性：`/api/v1/system/metrics` 接口（运行时/模块计数/forward 状态/存储挂载）
 - [x] M4 安全与发布：TLS 下 HSTS、CI govulncheck/npm audit、Go 1.26、依赖安全升级、版本 1.2.0
 
-## v1.3 — Reliability & Notifications（进行中）
+## v1.3 ✅ (released 2026-08-12)
 
 - [x] M1 Webhook 通知后端（2026-08-12）：`/api/v1/webhooks` 管理 API（CRUD + 测试发送）、事件总线全量订阅（forward/proxy/ddns/stun/wol/cron/acme/storage 的 created/updated/deleted）、HMAC-SHA256 签名（`X-NetBerth-Signature`）、最多 3 次重试与指数退避、有界并发（16）+ 队列满丢弃、事件过滤（空 = 全部）、secret 不回显（`has_secret`）、schema v4 迁移（含 Postgres 对齐）
 - [x] 可信代理白名单（2026-08-12）：`NB_TRUSTED_PROXIES` / `trusted_proxies`（IP 或 CIDR）；仅当直连 peer 受信任时才解析 XFF/X-Real-IP/True-Client-IP，默认全部忽略（防伪造）；`rate_limit_rate/burst` 配置非法（<1）启动即报错
 - [x] M2 Webhook 前端设置页（admin UI，2026-08-12）
 - [x] **v1.3.0 已发布**（2026-08-12）：release-gate 8/8 全绿、CI main/tag 双绿、资产校验一致；发布协议升级（一键门禁/原地镜像/SemVer/不可变 tag/draft 卫生）
+- [x] GHCR 容器镜像发布（2026-08-13）：`ghcr.io/netberth/netberth`（linux/amd64 + arm64，免 Docker Hub secrets；Docker Hub 保持手动）
 - [ ] P2P UDP hole punching with delta prediction
 - [ ] Admin panel i18n (中文/English)
 - [ ] Backup encryption (age/AES-GCM)
 
-## v1.3 Planned（待用户反馈后再排）
+## v1.4 Planned（待用户反馈后再排）
 
 - [ ] P2P UDP hole punching with delta prediction
 - [ ] Admin panel i18n (中文/English)

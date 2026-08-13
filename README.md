@@ -4,19 +4,34 @@
 
 Self-hosted NAT traversal & networking toolbox for NAS and homelab. Port forwarding, reverse proxy, DDNS, STUN NAT traversal, Wake-on-LAN, cron scheduling, ACME certificate management, and network storage — all in one binary.
 
-Deployable via Docker in 30 seconds.
+**v1.3.0** adds webhook notifications, trusted-proxy protection, per-IP brute-force
+lockout and request hardening — plus a reproducible QA devil-test harness. Deployable
+via Docker in 30 seconds.
+
+## Screenshots
+
+![Dashboard](docs/screenshots/dashboard.png)
+![Webhooks](docs/screenshots/webhooks.png)
 
 ## Quick Start
 
 ```bash
-# Clone and run
-git clone <repo-url> && cd netberth
-
 # Docker (recommended)
+docker pull ghcr.io/netberth/netberth:latest
+mkdir -p netberth-data
+docker run -d --name netberth --restart unless-stopped --network host \
+  -e NB_JWT_SECRET="$(openssl rand -base64 48)" \
+  -e NB_SERVER_PORT=8443 \
+  -v "$PWD/netberth-data:/app/data" \
+  -v "$PWD/netberth-certs:/app/certs" \
+  ghcr.io/netberth/netberth:latest
+
+# Or with docker compose (builds from source)
 echo "NB_JWT_SECRET=$(openssl rand -base64 48)" > .env
 docker compose up -d
 
 # Or build from source
+git clone <repo-url> && cd netberth
 make build && make run
 ```
 
@@ -37,10 +52,13 @@ make build && make run
 | **Cron Scheduler** | Visual cron editor, shell commands, module toggle actions |
 | **ACME Certificates** | Self-signed with ECDSA P-256. Auto-renew with configurable threshold |
 | **Network Storage** | Local/WebDAV mount. FileBrowser, WebDAV, FTP service endpoints |
+| **Webhooks** | Signed event delivery (HMAC-SHA256) for all module changes, with retries/backoff and admin UI |
 | **User Management** | Multi-user accounts, admin/operator/viewer roles, enable/disable, password reset |
+| **Security Hardening** | Per-IP brute-force lockout, rate limiting, trusted-proxy whitelist (`NB_TRUSTED_PROXIES`), request body/password caps, audit trail |
 | **Admin TLS** | HTTPS panel with auto self-signed or user-provided certificates (TLS 1.2+) |
 | **Audit Log** | Paginated audit trail with filters (admin only) |
 | **Database** | SQLite by default; PostgreSQL via NB_DB_DRIVER / NB_DB_DSN |
+| **Quality** | 8-suite QA harness (security/chaos/boundary/smoke/stress/sim/e2e/soak) + one-command release gate |
 
 ## Architecture
 
@@ -99,6 +117,8 @@ All endpoints at `/api/v1/`. Authentication via `Bearer <token>` header.
 | CRUD | `/cron` | Cron jobs |
 | CRUD | `/acme` | SSL certificates |
 | CRUD | `/storage` | Storage mounts |
+| CRUD | `/webhooks` | Webhook endpoints (admin only) |
+| POST | `/webhooks/{id}/test` | Send a test delivery (admin only) |
 | CRUD | `/users` | User management (admin only) |
 | POST | `/users/{id}/reset-password` | Reset a user password (admin only) |
 | GET | `/audit` | Paginated audit trail with filters (admin only) |
@@ -120,6 +140,9 @@ Environment variables override `config/netberth.yaml`:
 | `NB_TLS_ENABLED` | `false` | Serve the admin panel over HTTPS (TLS 1.2+) |
 | `NB_TLS_CERT` | auto self-signed | PEM certificate path (must be paired with NB_TLS_KEY) |
 | `NB_TLS_KEY` | auto self-signed | PEM private key path (must be paired with NB_TLS_CERT) |
+| `NB_TRUSTED_PROXIES` | empty | Comma-separated trusted proxy IPs/CIDRs; proxy headers are ignored unless the peer is trusted |
+| `NB_RATE_LIMIT_RATE` | `100` | Per-IP token bucket rate (requests/sec) |
+| `NB_RATE_LIMIT_BURST` | `200` | Per-IP token bucket burst |
 
 ## License
 

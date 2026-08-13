@@ -7,6 +7,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Extra GHCR image tag (e.g. v1.3.0)'
+        required: false
+        type: string
 
 jobs:
   backend:
@@ -53,7 +58,7 @@ jobs:
   publish:
     needs: docker
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && secrets.DOCKER_USERNAME != ''
     steps:
       - uses: actions/checkout@v4
       - name: Log in to Docker Hub
@@ -69,3 +74,29 @@ jobs:
           tags: |
             netberth/netberth:${{ github.ref_name }}
             netberth/netberth:latest
+
+  # GHCR needs no repository secrets: GITHUB_TOKEN has package write access.
+  ghcr:
+    needs: docker
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/netberth/netberth:${{ inputs.version != '' && inputs.version || (github.ref_type == 'tag' && github.ref_name || 'main') }}
+            ghcr.io/netberth/netberth:latest
