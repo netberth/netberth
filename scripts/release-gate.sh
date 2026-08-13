@@ -81,6 +81,7 @@ else
     --exclude='node_modules' \
     --exclude='*.db' --exclude='*.jwt_secret' --exclude='*.bundle' \
     --exclude='HANDOVER.md' --exclude='AGENTS.md' \
+    --exclude='docs/design' \
     --exclude='* 2.*' --exclude='* 3' \
     --exclude='.DS_Store' \
     --exclude='/netberth' --exclude='/netberth-linux' --exclude='/netharbor' --exclude='/netharbor-linux' \
@@ -95,7 +96,8 @@ FORBIDDEN=$(find "$PUBLIC" -not -path '*/.git/*' \( \
   -o -name 'PROJECT_HERITAGE.md' -o -name '*report*.md' \
   -o -name 'project-snapshot.md' -o -name 'release-manifest.md' \
   -o -name '*.db' -o -name '*.jwt_secret' -o -name '*.bundle' \
-  -o -path '*/internal/licensing/enterprise*' -o -name 'factory_ent.go' \) -print | head -20)
+  -o -path '*/internal/licensing/enterprise*' -o -name 'factory_ent.go' \
+  -o -path '*/docs/design*' \) -print | head -20)
 check "public_forbidden_files" "" "${FORBIDDEN}" "no private files leaked"
 SENS=$(cd "$PUBLIC" && rg -l --hidden -g '!.git' -g '!dist' -g '!node_modules' -g '!vendor' \
   -g '!scripts/release.sh' -g '!scripts/release-gate.sh' \

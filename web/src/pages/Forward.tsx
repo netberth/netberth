@@ -11,9 +11,11 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, Trash2, Edit3 } from 'lucide-react'
 import type { ForwardRule, PaginatedResponse } from '@/types'
+import { useI18n } from '@/i18n'
 
 export function Forward() {
   const queryClient = useQueryClient()
+  const { t } = useI18n()
   const [page] = useState(1)
   const [editing, setEditing] = useState<ForwardRule | null>(null)
   const [form, setForm] = useState<{ name: string; protocol: 'tcp'|'udp'|'both'; listen_addr: string; listen_port: number; target_addr: string; target_port: number; enable_ipv6: boolean; enabled: boolean }>({ name: '', protocol: 'tcp', listen_addr: '', listen_port: 0, target_addr: '', target_port: 0, enable_ipv6: true, enabled: false })
@@ -44,30 +46,30 @@ export function Forward() {
   }
 
   return (
-    <PageLayout title="Port Forwarding" description="TCP/UDP port forwarding rules for IPv4 and IPv6" actions={
-      <Button onClick={() => { resetForm() }} size="sm"><Plus className="mr-1 h-4 w-4" /> Add Rule</Button>
+    <PageLayout title={t('Port Forwarding')} description={t('TCP/UDP port forwarding rules for IPv4 and IPv6')} actions={
+      <Button onClick={() => { resetForm() }} size="sm"><Plus className="mr-1 h-4 w-4" /> {t('Add Rule')}</Button>
     }>
       {/* Form */}
       <Card className="border-border">
         <CardContent className="pt-6">
           <div className="grid grid-cols-6 gap-3">
-            <div><Label>Name</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Rule name" /></div>
+            <div><Label>{t('Name')}</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder={t('Rule name')} /></div>
             <div>
-              <Label>Protocol</Label>
+              <Label>{t('Protocol')}</Label>
               <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.protocol} onChange={e => setForm({...form, protocol: e.target.value as 'tcp'|'udp'|'both'})}>
                 <option value="tcp">TCP</option><option value="udp">UDP</option><option value="both">TCP+UDP</option>
               </select>
             </div>
-            <div><Label>Listen Addr</Label><Input value={form.listen_addr} onChange={e => setForm({...form, listen_addr: e.target.value})} placeholder="0.0.0.0" /></div>
-            <div><Label>Listen Port</Label><Input type="number" value={form.listen_port || ''} onChange={e => setForm({...form, listen_port: +e.target.value})} placeholder="8080" /></div>
-            <div><Label>Target Addr</Label><Input value={form.target_addr} onChange={e => setForm({...form, target_addr: e.target.value})} placeholder="192.168.1.100" /></div>
-            <div><Label>Target Port</Label><Input type="number" value={form.target_port || ''} onChange={e => setForm({...form, target_port: +e.target.value})} placeholder="80" /></div>
+            <div><Label>{t('Listen Addr')}</Label><Input value={form.listen_addr} onChange={e => setForm({...form, listen_addr: e.target.value})} placeholder="0.0.0.0" /></div>
+            <div><Label>{t('Listen Port')}</Label><Input type="number" value={form.listen_port || ''} onChange={e => setForm({...form, listen_port: +e.target.value})} placeholder="8080" /></div>
+            <div><Label>{t('Target Addr')}</Label><Input value={form.target_addr} onChange={e => setForm({...form, target_addr: e.target.value})} placeholder="192.168.1.100" /></div>
+            <div><Label>{t('Target Port')}</Label><Input type="number" value={form.target_port || ''} onChange={e => setForm({...form, target_port: +e.target.value})} placeholder="80" /></div>
           </div>
           <div className="mt-3 flex items-center gap-6">
-            <div className="flex items-center gap-2"><Switch checked={form.enable_ipv6} onCheckedChange={v => setForm({...form, enable_ipv6: v})} /><Label>IPv6</Label></div>
-            <div className="flex items-center gap-2"><Switch checked={form.enabled} onCheckedChange={v => setForm({...form, enabled: v})} /><Label>Enabled</Label></div>
-            <Button onClick={() => createMutation.mutate(form)} size="sm">Save Rule</Button>
+            <div className="flex items-center gap-2"><Switch checked={form.enable_ipv6} onCheckedChange={v => setForm({...form, enable_ipv6: v})} /><Label>{t('IPv6')}</Label></div>
+            <div className="flex items-center gap-2"><Switch checked={form.enabled} onCheckedChange={v => setForm({...form, enabled: v})} /><Label>{t('Enabled')}</Label></div>
+            <Button onClick={() => createMutation.mutate(form)} size="sm">{t('Save Rule')}</Button>
           </div>
         </CardContent>
       </Card>
@@ -77,14 +79,14 @@ export function Forward() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead><TableHead>Protocol</TableHead><TableHead>Listen</TableHead><TableHead>Target</TableHead><TableHead>IPv6</TableHead><TableHead>Status</TableHead><TableHead className="w-[100px]">Actions</TableHead>
+                <TableHead>{t('Name')}</TableHead><TableHead>{t('Protocol')}</TableHead><TableHead>{t('Listen')}</TableHead><TableHead>{t('Target')}</TableHead><TableHead>{t('IPv6')}</TableHead><TableHead>{t('Status')}</TableHead><TableHead className="w-[100px]">{t('Actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">{t('Loading...')}</TableCell></TableRow>
               ) : data?.data?.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No rules yet</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">{t('No rules yet')}</TableCell></TableRow>
               ) : (
                 data?.data?.map((rule) => (
                   <TableRow key={rule.id}>
@@ -92,7 +94,7 @@ export function Forward() {
                     <TableCell><Badge variant="secondary">{rule.protocol.toUpperCase()}</Badge></TableCell>
                     <TableCell className="font-mono text-xs">{rule.listen_addr}:{rule.listen_port}</TableCell>
                     <TableCell className="font-mono text-xs">{rule.target_addr}:{rule.target_port}</TableCell>
-                    <TableCell>{rule.enable_ipv6 ? <Badge variant="success">On</Badge> : <Badge variant="secondary">Off</Badge>}</TableCell>
+                    <TableCell>{rule.enable_ipv6 ? <Badge variant="success">{t('On')}</Badge> : <Badge variant="secondary">{t('Off')}</Badge>}</TableCell>
                     <TableCell>
                       <Switch checked={rule.enabled} onCheckedChange={() => toggleMutation.mutate(rule)} />
                     </TableCell>

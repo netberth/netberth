@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Anchor, Eye, EyeOff } from 'lucide-react'
+import { useI18n } from '@/i18n'
 
 export function Login() {
   const [username, setUsername] = useState('')
@@ -15,6 +16,7 @@ export function Login() {
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+  const { t } = useI18n()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,7 +26,7 @@ export function Login() {
     if (ok) {
       navigate('/')
     } else {
-      setError('Invalid credentials')
+      setError(t('Invalid credentials'))
     }
     setLoading(false)
   }
@@ -37,22 +39,22 @@ export function Login() {
             <Anchor className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="text-xl">NetBerth</CardTitle>
-          <CardDescription>Sign in to your admin panel</CardDescription>
+          <CardDescription>{t('Sign in to your admin panel')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">{t('Username')}</Label>
               <Input
                 id="username"
-                placeholder="Enter username"
+                placeholder={t('Enter username')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoFocus
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('Password')}</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -72,7 +74,7 @@ export function Login() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? t('Signing in...') : t('Sign in')}
             </Button>
           </form>
         </CardContent>

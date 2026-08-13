@@ -10,9 +10,11 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, Trash2, Power } from 'lucide-react'
 import type { WOLDevice } from '@/types'
+import { useI18n } from '@/i18n'
 
 export function WOL() {
   const queryClient = useQueryClient()
+  const { t } = useI18n()
   const [form, setForm] = useState({ name: '', mac: '', broadcast: '255.255.255.255', port: 9 })
 
   const { data, isLoading } = useQuery({
@@ -36,19 +38,19 @@ export function WOL() {
   })
 
   return (
-    <PageLayout title="Wake-on-LAN" description="Remotely wake devices on your network via magic packet" actions={
-      <Button size="sm"><Plus className="mr-1 h-4 w-4" /> Add Device</Button>
+    <PageLayout title={t('Wake-on-LAN')} description={t('Remotely wake devices on your network via magic packet')} actions={
+      <Button size="sm"><Plus className="mr-1 h-4 w-4" /> {t('Add Device')}</Button>
     }>
       <Card className="border-border">
         <CardContent className="pt-6">
           <div className="grid grid-cols-4 gap-3">
-            <div><Label>Name</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Device name" /></div>
-            <div><Label>MAC Address</Label><Input value={form.mac} onChange={e => setForm({...form, mac: e.target.value})} placeholder="AA:BB:CC:DD:EE:FF" /></div>
-            <div><Label>Broadcast</Label><Input value={form.broadcast} onChange={e => setForm({...form, broadcast: e.target.value})} /></div>
-            <div><Label>Port</Label><Input type="number" value={form.port} onChange={e => setForm({...form, port: +e.target.value})} /></div>
+            <div><Label>{t('Name')}</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder={t('Device name')} /></div>
+            <div><Label>{t('MAC Address')}</Label><Input value={form.mac} onChange={e => setForm({...form, mac: e.target.value})} placeholder="AA:BB:CC:DD:EE:FF" /></div>
+            <div><Label>{t('Broadcast')}</Label><Input value={form.broadcast} onChange={e => setForm({...form, broadcast: e.target.value})} /></div>
+            <div><Label>{t('Port')}</Label><Input type="number" value={form.port} onChange={e => setForm({...form, port: +e.target.value})} /></div>
           </div>
           <div className="mt-3">
-            <Button onClick={() => createMutation.mutate(form as unknown as Record<string, unknown>)} size="sm">Save Device</Button>
+            <Button onClick={() => createMutation.mutate(form as unknown as Record<string, unknown>)} size="sm">{t('Save Device')}</Button>
           </div>
         </CardContent>
       </Card>
@@ -57,14 +59,14 @@ export function WOL() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead><TableHead>MAC</TableHead><TableHead>Broadcast</TableHead><TableHead>Port</TableHead><TableHead className="w-[120px]">Actions</TableHead>
+                <TableHead>{t('Name')}</TableHead><TableHead>{t('MAC')}</TableHead><TableHead>{t('Broadcast')}</TableHead><TableHead>{t('Port')}</TableHead><TableHead className="w-[120px]">{t('Actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">{t('Loading...')}</TableCell></TableRow>
               ) : (data?.data ?? []).length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">No devices</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">{t('No devices')}</TableCell></TableRow>
               ) : (
                 (data?.data ?? []).map((d) => (
                   <TableRow key={d.id}>
@@ -74,7 +76,7 @@ export function WOL() {
                     <TableCell>{d.port}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="outline" size="icon" onClick={() => wakeMutation.mutate(d.id)} title="Wake"><Power className="h-4 w-4 text-emerald-400" /></Button>
+                        <Button variant="outline" size="icon" onClick={() => wakeMutation.mutate(d.id)} title={t('Wake')}><Power className="h-4 w-4 text-emerald-400" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(d.id)}><Trash2 className="h-4 w-4 text-muted-foreground" /></Button>
                       </div>
                     </TableCell>

@@ -12,9 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Plus, Trash2, Shield, RefreshCw } from 'lucide-react'
 import { statusColor } from '@/lib/utils'
 import type { ACMECertificate } from '@/types'
+import { useI18n } from '@/i18n'
 
 export function ACME() {
   const queryClient = useQueryClient()
+  const { t } = useI18n()
   const [form, setForm] = useState({ name: '', domains: '', provider: 'letsencrypt', dns_provider: 'cloudflare', email: '', auto_renew: true })
 
   const { data, isLoading } = useQuery({
@@ -41,34 +43,34 @@ export function ACME() {
   })
 
   return (
-    <PageLayout title="SSL Certificates" description="Automatic SSL/TLS certificate management via ACME" actions={
-      <Button size="sm"><Plus className="mr-1 h-4 w-4" /> Request Certificate</Button>
+    <PageLayout title={t('SSL Certificates')} description={t('Automatic SSL/TLS certificate management via ACME')} actions={
+      <Button size="sm"><Plus className="mr-1 h-4 w-4" /> {t('Request Certificate')}</Button>
     }>
       <Card className="border-border">
         <CardContent className="pt-6">
           <div className="grid grid-cols-3 gap-3">
-            <div><Label>Name</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Cert name" /></div>
-            <div><Label>Domains (comma-separated)</Label><Input value={form.domains} onChange={e => setForm({...form, domains: e.target.value})} placeholder="example.com, *.example.com" /></div>
-            <div><Label>Email</Label><Input value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="admin@example.com" /></div>
+            <div><Label>{t('Name')}</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder={t('Cert name')} /></div>
+            <div><Label>{t('Domains (comma-separated)')}</Label><Input value={form.domains} onChange={e => setForm({...form, domains: e.target.value})} placeholder="example.com, *.example.com" /></div>
+            <div><Label>{t('Email')}</Label><Input value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="admin@example.com" /></div>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-3">
             <div>
-              <Label>Provider</Label>
+              <Label>{t('Provider')}</Label>
               <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.provider} onChange={e => setForm({...form, provider: e.target.value})}>
                 <option value="letsencrypt">Let's Encrypt</option><option value="zerossl">ZeroSSL</option>
               </select>
             </div>
             <div>
-              <Label>DNS Provider</Label>
+              <Label>{t('DNS Provider')}</Label>
               <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.dns_provider} onChange={e => setForm({...form, dns_provider: e.target.value})}>
                 <option value="cloudflare">Cloudflare</option><option value="aliyun">Aliyun</option><option value="dnspod">DNSPod</option>
               </select>
             </div>
             <div className="flex items-end pb-1 gap-6">
-              <div className="flex items-center gap-2"><Switch checked={form.auto_renew} onCheckedChange={v => setForm({...form, auto_renew: v})} /><Label>Auto Renew</Label></div>
-              <Button onClick={() => createMutation.mutate(form as unknown as Record<string, unknown>)} size="sm">Issue Certificate</Button>
+              <div className="flex items-center gap-2"><Switch checked={form.auto_renew} onCheckedChange={v => setForm({...form, auto_renew: v})} /><Label>{t('Auto Renew')}</Label></div>
+              <Button onClick={() => createMutation.mutate(form as unknown as Record<string, unknown>)} size="sm">{t('Issue Certificate')}</Button>
             </div>
           </div>
         </CardContent>
@@ -78,14 +80,14 @@ export function ACME() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead><TableHead>Domains</TableHead><TableHead>Provider</TableHead><TableHead>Expires</TableHead><TableHead>Status</TableHead><TableHead className="w-[120px]">Actions</TableHead>
+                <TableHead>{t('Name')}</TableHead><TableHead>{t('Domains')}</TableHead><TableHead>{t('Provider')}</TableHead><TableHead>{t('Expires')}</TableHead><TableHead>{t('Status')}</TableHead><TableHead className="w-[120px]">{t('Actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">{t('Loading...')}</TableCell></TableRow>
               ) : (data?.data ?? []).length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No certificates</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">{t('No certificates')}</TableCell></TableRow>
               ) : (
                 (data?.data ?? []).map((c) => (
                   <TableRow key={c.id}>
@@ -96,7 +98,7 @@ export function ACME() {
                     <TableCell><Badge className={statusColor(c.status)}>{c.status}</Badge></TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        {c.status === 'valid' && <Button variant="outline" size="icon" onClick={() => renewMutation.mutate(c.id)} title="Renew"><RefreshCw className="h-4 w-4" /></Button>}
+                        {c.status === 'valid' && <Button variant="outline" size="icon" onClick={() => renewMutation.mutate(c.id)} title={t('Renew')}><RefreshCw className="h-4 w-4" /></Button>}
                         <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(c.id)}><Trash2 className="h-4 w-4 text-muted-foreground" /></Button>
                       </div>
                     </TableCell>

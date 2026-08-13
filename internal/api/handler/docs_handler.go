@@ -114,7 +114,7 @@ Pro: unlimited rules, priority support, commercial use
 Enterprise: unlimited rules, dedicated support, custom features, on-prem deployment
 
 Activate: Settings > License > paste your license key
-Generate key: contact sales@netberth.io`,
+Generate key: contact the maintainers via GitHub Issues`,
 		},
 	},
 }

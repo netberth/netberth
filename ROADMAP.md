@@ -87,8 +87,14 @@
 - [x] 覆盖率：acme 93.3% / stun 80.9% / security 100% / websocket 97.8%；
   vet/构建/全量短测/企业测试/race 全绿
 
-## v1.4 Planned（待用户反馈后再排）
+## v1.4 ✅ (released 2026-08-13)
+
+- [x] Admin panel i18n（中文/English，零依赖，顶栏切换，默认英文）
+- [x] 备份加密（NBBK2：AES-256-GCM + Argon2id，整体完整性认证；明文兼容）
+- [x] 恢复加固（0600 临时文件、fsync、原子替换带回滚）
+- [x] 发布防误推：私有仓库 pre-push hook（黑名单 SHA + 非 noreply 身份即拒）
+
+## v1.5 Planned（待用户反馈后再排）
 
 - [ ] P2P UDP hole punching with delta prediction
-- [ ] Admin panel i18n (中文/English)
-- [ ] Backup encryption (age/AES-GCM)
+- [ ] 其他候选：CLI 备份命令、cosign/SLSA 供应链签名、Docker Hub 自动发布

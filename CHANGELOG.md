@@ -16,6 +16,38 @@ All notable changes to NetBerth are documented here. Versioning follows
 - README/Quick Start refreshed for v1.3: screenshots, Webhook & trusted-proxy
   documentation, one-command container run.
 
+## [1.4.0] - 2026-08-13
+
+### Added
+
+- Bilingual admin panel (English/中文): zero-dependency i18n with a header
+  language toggle (persisted), 226 UI strings translated, English default so
+  existing flows and E2E selectors are unchanged.
+- Encrypted backup/restore: `GET /system/backup` with
+  `X-NetBerth-Backup-Password` streams a `.nbbk` envelope (AES-256-GCM +
+  Argon2id, 1 MiB chunks); `POST /system/restore` auto-detects the envelope.
+  Plaintext `.db` backups remain fully supported.
+- NBBK2 integrity: every chunk is authenticated with its sequence number and a
+  final authenticated footer binds the total chunk count — deletion, reordering
+  or truncation of any record fails decryption (same error as a wrong
+  passphrase).
+
+### Changed
+
+- Restore hardening: temp files in the target directory (0600), `fsync` before
+  atomic rename with rollback, cleanup on every error path.
+- Removed the fake `sales@netberth.io` contact from the embedded docs
+  (maintainers now point to GitHub Issues).
+- Pre-push guard installed in the private repos: pushes containing any
+  blacklisted PII commit or non-noreply identity are rejected.
+
+### Tests
+
+- backupcrypto: round-trip (empty/1B/1MiB/multi-chunk), byte flip, chunk
+  deletion/swapping, truncation, footer removal, wrong passphrase, version
+  mismatch, stream read/write errors; handler end-to-end encrypted/plaintext
+  restore with rollback checks — all `-race` green (84.7% coverage).
+
 ## [1.3.1] - 2026-08-13
 
 ### Fixed

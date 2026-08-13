@@ -2,7 +2,14 @@
 
 ## Current Release
 
-**v1.3.1** (2026-08-13) — STUN/ACME hardening
+**v1.4.0** (2026-08-13) — Bilingual UI & encrypted backups
+
+- Bilingual admin panel (English/中文), zero-dependency i18n, header toggle
+- Encrypted backup/restore: `.nbbk` (AES-256-GCM + Argon2id), plaintext `.db`
+  fully backward compatible; NBBK2 whole-stream integrity
+- Restore hardening: 0600 temp files, fsync, atomic replace with rollback
+
+Previous release: **v1.3.1** (2026-08-13) — STUN/ACME hardening
 
 - STUN RFC 5389 compliance: MAPPED-ADDRESS / ALTERNATE-SERVER plain encoding,
   IPv6 XOR-MAPPED-ADDRESS, FINGERPRINT CRC-32 validation, response source and
@@ -36,6 +43,7 @@ The package is public: anyone can pull without authentication.
 
 ```bash
 docker pull ghcr.io/netberth/netberth:latest
+docker pull ghcr.io/netberth/netberth:v1.4.0
 docker pull ghcr.io/netberth/netberth:v1.3.1
 docker pull ghcr.io/netberth/netberth:v1.3.0
 ```

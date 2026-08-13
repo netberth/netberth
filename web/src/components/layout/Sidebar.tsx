@@ -5,6 +5,7 @@ import {
   Power, Clock, Shield, HardDrive, Settings, Users as UsersIcon, ScrollText, Anchor, Send
 } from 'lucide-react'
 import { useAuth } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -24,6 +25,7 @@ const navItems = [
 
 export function Sidebar() {
   const { user } = useAuth()
+  const { t } = useI18n()
   const adminOnly = ['/users', '/audit', '/webhooks']
   const items = user?.role === 'admin' ? navItems : navItems.filter(i => !adminOnly.includes(i.to))
   return (
@@ -48,7 +50,7 @@ export function Sidebar() {
             }
           >
             <Icon className="h-4 w-4" />
-            {label}
+            {t(label)}
           </NavLink>
         ))}
       </nav>

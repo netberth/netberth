@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeftRight, Globe, RefreshCw, Network, Power, Clock, Shield, HardDrive } from 'lucide-react'
 import { formatBytes, formatUptime } from '@/lib/utils'
 import type { SystemStatus } from '@/types'
+import { useI18n } from '@/i18n'
 
 const modules = [
   { key: 'forward_rules', label: 'Port Forwarding', icon: ArrowLeftRight, color: 'text-blue-400' },
@@ -45,6 +46,7 @@ interface WSStatus {
 export function Dashboard() {
   const [wsStatus, setWsStatus] = useState<WSStatus | null>(null)
   const [wsConnected, setWsConnected] = useState(false)
+  const { t } = useI18n()
 
   const { data: status } = useQuery({
     queryKey: ['system-status'],
@@ -77,16 +79,16 @@ export function Dashboard() {
   const sys = status?.data ?? wsStatus?.system
   const mods = dashboard?.data?.modules
 
-  const natLabels: Record<number, string> = { 0:'Unknown', 1:'Open', 2:'Full Cone', 3:'Restricted Cone', 4:'Port Restricted', 5:'Symmetric' }
+  const natLabels: Record<number, string> = { 0:t('Unknown'), 1:t('Open'), 2:t('Full Cone'), 3:t('Restricted Cone'), 4:t('Port Restricted'), 5:t('Symmetric') }
 
   return (
-    <PageLayout title="Dashboard" description="Real-time overview of all network services">
+    <PageLayout title={t('Dashboard')} description={t('Real-time overview of all network services')}>
       {/* Module cards */}
       <div className="grid grid-cols-4 gap-4">
         {modules.map(({ key, label, icon: Icon, color }) => (
           <Card key={key} className="border-border">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t(label)}</CardTitle>
               <Icon className={`h-4 w-4 ${color}`} />
             </CardHeader>
             <CardContent>
@@ -101,28 +103,28 @@ export function Dashboard() {
         <Card className="border-border border-amber-500/20 bg-amber-500/5">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <Network className="h-4 w-4 text-amber-400" /> STUN Topology
+              <Network className="h-4 w-4 text-amber-400" /> {t('STUN Topology')}
             </CardTitle>
-            <Badge variant={wsConnected ? 'success' : 'warning'}>{wsConnected ? 'Live' : 'Polling'}</Badge>
+            <Badge variant={wsConnected ? 'success' : 'warning'}>{wsConnected ? t('Live') : t('Polling')}</Badge>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-4 gap-4 text-sm">
               <div>
-                <span className="text-muted-foreground">NAT Type</span>
+                <span className="text-muted-foreground">{t('NAT Type')}</span>
                 <div className="mt-1 font-mono text-amber-400 font-bold text-lg">
-                  {natLabels[wsStatus.stun.nat_type] ?? `Type ${wsStatus.stun.nat_type}`}
+                  {natLabels[wsStatus.stun.nat_type] ?? t('Type {n}', { n: wsStatus.stun.nat_type })}
                 </div>
               </div>
               <div>
-                <span className="text-muted-foreground">Public IP</span>
+                <span className="text-muted-foreground">{t('Public IP')}</span>
                 <div className="mt-1 font-mono text-emerald-400">{wsStatus.stun.mapped_ip || '—'}</div>
               </div>
               <div>
-                <span className="text-muted-foreground">Mapped Port</span>
+                <span className="text-muted-foreground">{t('Mapped Port')}</span>
                 <div className="mt-1 font-mono">{wsStatus.stun.mapped_port || '—'}</div>
               </div>
               <div>
-                <span className="text-muted-foreground">STUN Servers</span>
+                <span className="text-muted-foreground">{t('STUN Servers')}</span>
                 <div className="mt-1 font-mono">{wsStatus.stun.servers || '—'}</div>
               </div>
             </div>
@@ -135,7 +137,7 @@ export function Dashboard() {
         <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <HardDrive className="h-4 w-4 text-orange-400" /> Storage Mounts
+              <HardDrive className="h-4 w-4 text-orange-400" /> {t('Storage Mounts')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -145,7 +147,7 @@ export function Dashboard() {
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium">{m.name}</p>
-                      <Badge variant={m.enabled ? 'success' : 'secondary'}>{m.enabled ? 'Mounted' : 'Off'}</Badge>
+                      <Badge variant={m.enabled ? 'success' : 'secondary'}>{m.enabled ? t('Mounted') : t('Off')}</Badge>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground font-mono truncate">{m.source}</p>
                   </CardContent>
@@ -160,8 +162,8 @@ export function Dashboard() {
       {wsStatus?.forward && wsStatus.forward.length > 0 && (
         <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Active Forward Connections</CardTitle>
-            <Badge variant={wsConnected ? 'success' : 'warning'}>{wsConnected ? 'Live' : 'Connecting...'}</Badge>
+            <CardTitle className="text-base">{t('Active Forward Connections')}</CardTitle>
+            <Badge variant={wsConnected ? 'success' : 'warning'}>{wsConnected ? t('Live') : t('Connecting...')}</Badge>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-4 gap-4">
@@ -170,9 +172,9 @@ export function Dashboard() {
                   <CardContent className="pt-4">
                     <p className="text-sm font-medium">{f.name || f.id.slice(0, 8)}</p>
                     <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                      <div className="flex justify-between"><span>Connections</span><span className="font-mono text-emerald-400">{f.connections}</span></div>
-                      <div className="flex justify-between"><span>In</span><span className="font-mono">{formatBytes(f.bytes_in)}</span></div>
-                      <div className="flex justify-between"><span>Out</span><span className="font-mono">{formatBytes(f.bytes_out)}</span></div>
+                      <div className="flex justify-between"><span>{t('Connections')}</span><span className="font-mono text-emerald-400">{f.connections}</span></div>
+                      <div className="flex justify-between"><span>{t('In')}</span><span className="font-mono">{formatBytes(f.bytes_in)}</span></div>
+                      <div className="flex justify-between"><span>{t('Out')}</span><span className="font-mono">{formatBytes(f.bytes_out)}</span></div>
                     </div>
                   </CardContent>
                 </Card>
@@ -185,13 +187,13 @@ export function Dashboard() {
       {/* System Info */}
       {sys && (
         <Card className="border-border">
-          <CardHeader><CardTitle className="text-base">System Information</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t('System Information')}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-4 gap-6 text-sm">
-              <div><span className="text-muted-foreground">Uptime:</span> <span className="ml-2 font-mono">{formatUptime(typeof sys.uptime === 'number' ? sys.uptime : 0)}</span></div>
-              <div><span className="text-muted-foreground">Version:</span> <span className="ml-2 font-mono">{String((sys as unknown as Record<string,unknown>).version ?? '—')}</span></div>
-              <div><span className="text-muted-foreground">Goroutines:</span> <span className="ml-2 font-mono">{String((sys as unknown as Record<string,unknown>).goroutines ?? '—')}</span></div>
-              <div><span className="text-muted-foreground">Memory:</span> <span className="ml-2 font-mono">{sys.memory_mb ?? '—'} MB</span></div>
+              <div><span className="text-muted-foreground">{t('Uptime:')}</span> <span className="ml-2 font-mono">{formatUptime(typeof sys.uptime === 'number' ? sys.uptime : 0)}</span></div>
+              <div><span className="text-muted-foreground">{t('Version:')}</span> <span className="ml-2 font-mono">{String((sys as unknown as Record<string,unknown>).version ?? '—')}</span></div>
+              <div><span className="text-muted-foreground">{t('Goroutines:')}</span> <span className="ml-2 font-mono">{String((sys as unknown as Record<string,unknown>).goroutines ?? '—')}</span></div>
+              <div><span className="text-muted-foreground">{t('Memory:')}</span> <span className="ml-2 font-mono">{sys.memory_mb ?? '—'} MB</span></div>
             </div>
           </CardContent>
         </Card>

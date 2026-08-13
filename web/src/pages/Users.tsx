@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, Trash2, KeyRound } from 'lucide-react'
 import type { User } from '@/types'
+import { useI18n } from '@/i18n'
 
 type Role = 'admin' | 'operator' | 'viewer'
 const ROLES: Role[] = ['admin', 'operator', 'viewer']
@@ -25,6 +26,7 @@ interface UserForm {
 
 export function Users() {
   const { user: currentUser } = useAuth()
+  const { t } = useI18n()
   const queryClient = useQueryClient()
   const [form, setForm] = useState<UserForm>({ username: '', email: '', role: 'viewer', password: '' })
   const [msg, setMsg] = useState('')
@@ -43,7 +45,7 @@ export function Users() {
       setMsg('')
       invalidate()
     },
-    onError: () => setMsg('Create failed — username may already exist'),
+    onError: () => setMsg(t('Create failed — username may already exist')),
   })
 
   const updateMutation = useMutation({
@@ -65,34 +67,34 @@ export function Users() {
 
   if (currentUser?.role !== 'admin') {
     return (
-      <PageLayout title="Users" description="User management">
-        <p className="text-sm text-muted-foreground">You do not have permission to manage users.</p>
+      <PageLayout title={t('Users')} description={t('User management')}>
+        <p className="text-sm text-muted-foreground">{t('You do not have permission to manage users.')}</p>
       </PageLayout>
     )
   }
 
   const handleReset = (u: User) => {
-    const pw = window.prompt(`New password for ${u.username} (min 8 characters):`)
+    const pw = window.prompt(t('New password for {name} (min 8 characters):', { name: u.username }))
     if (!pw) return
     if (pw.length < 8) {
-      window.alert('Password must be at least 8 characters')
+      window.alert(t('Password must be at least 8 characters'))
       return
     }
     resetMutation.mutate({ id: u.id, password: pw })
   }
 
   const handleDelete = (u: User) => {
-    if (!window.confirm(`Delete user ${u.username}?`)) return
+    if (!window.confirm(t('Delete user {name}?', { name: u.username }))) return
     deleteMutation.mutate(u.id)
   }
 
   return (
     <PageLayout
-      title="Users"
-      description="Create and manage user accounts and roles"
+      title={t('Users')}
+      description={t('Create and manage user accounts and roles')}
       actions={
         <Button size="sm" onClick={() => createMutation.mutate(form)}>
-          <Plus className="mr-1 h-4 w-4" /> Add User
+          <Plus className="mr-1 h-4 w-4" /> {t('Add User')}
         </Button>
       }
     >
@@ -100,15 +102,15 @@ export function Users() {
         <CardContent className="pt-6">
           <div className="grid grid-cols-4 gap-3">
             <div>
-              <Label>Username</Label>
+              <Label>{t('Username')}</Label>
               <Input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder="username" />
             </div>
             <div>
-              <Label>Email</Label>
+              <Label>{t('Email')}</Label>
               <Input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="user@example.com" />
             </div>
             <div>
-              <Label>Role</Label>
+              <Label>{t('Role')}</Label>
               <select
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.role}
@@ -118,12 +120,12 @@ export function Users() {
               </select>
             </div>
             <div>
-              <Label>Initial Password</Label>
-              <Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="min 8 chars" />
+              <Label>{t('Initial Password')}</Label>
+              <Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder={t('min 8 chars')} />
             </div>
           </div>
           {msg && <p className="mt-2 text-sm text-destructive">{msg}</p>}
-          <p className="mt-2 text-xs text-muted-foreground">New users must change their password on first login.</p>
+          <p className="mt-2 text-xs text-muted-foreground">{t('New users must change their password on first login.')}</p>
         </CardContent>
       </Card>
 
@@ -132,24 +134,24 @@ export function Users() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Username</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Enabled</TableHead>
-                <TableHead className="w-[140px]">Actions</TableHead>
+                <TableHead>{t('Username')}</TableHead>
+                <TableHead>{t('Email')}</TableHead>
+                <TableHead>{t('Role')}</TableHead>
+                <TableHead>{t('Enabled')}</TableHead>
+                <TableHead className="w-[140px]">{t('Actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">{t('Loading...')}</TableCell></TableRow>
               ) : data?.data?.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">No users yet</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">{t('No users yet')}</TableCell></TableRow>
               ) : (
                 data?.data?.map(u => (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">
                       {u.username}
-                      {u.id === currentUser?.id && <Badge className="ml-2" variant="secondary">you</Badge>}
+                      {u.id === currentUser?.id && <Badge className="ml-2" variant="secondary">{t('you')}</Badge>}
                     </TableCell>
                     <TableCell>{u.email}</TableCell>
                     <TableCell>
@@ -170,11 +172,11 @@ export function Users() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" title="Reset password" onClick={() => handleReset(u)}>
+                        <Button variant="ghost" size="icon" title={t('Reset password')} onClick={() => handleReset(u)}>
                           <KeyRound className="h-4 w-4 text-muted-foreground" />
                         </Button>
                         {u.id !== currentUser?.id && (
-                          <Button variant="ghost" size="icon" title="Delete user" onClick={() => handleDelete(u)}>
+                          <Button variant="ghost" size="icon" title={t('Delete user')} onClick={() => handleDelete(u)}>
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         )}

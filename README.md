@@ -4,9 +4,10 @@
 
 Self-hosted NAT traversal & networking toolbox for NAS and homelab. Port forwarding, reverse proxy, DDNS, STUN NAT traversal, Wake-on-LAN, cron scheduling, ACME certificate management, and network storage — all in one binary.
 
-**v1.3.1** adds RFC 5389 STUN compliance fixes, hardened ACME issuance and shared
-constant-time HMAC signing; **v1.3.0** introduced webhook notifications, trusted-proxy
-protection and per-IP brute-force lockout. Deployable via Docker in 30 seconds.
+**v1.4.0** adds a bilingual admin panel (English/中文), passphrase-encrypted
+database backups (`.nbbk`, AES-256-GCM + Argon2id), and tightened release
+guards; **v1.3.1** added RFC 5389 STUN compliance fixes and hardened ACME
+issuance. Deployable via Docker in 30 seconds.
 
 ## Screenshots
 
@@ -108,6 +109,8 @@ All endpoints at `/api/v1/`. Authentication via `Bearer <token>` header.
 | GET | `/ws` | WebSocket real-time status |
 | GET | `/system/status` | Server health + runtime info |
 | GET | `/system/metrics` | Machine-readable runtime + module metrics |
+| GET | `/system/backup` | Download database backup; add `X-NetBerth-Backup-Password` for an encrypted `.nbbk` |
+| POST | `/system/restore` | Restore database (plain `.db` or encrypted `.nbbk` with password header) |
 | CRUD | `/forward-rules` | Port forwarding rules |
 | CRUD | `/proxy-rules` | Reverse proxy rules |
 | CRUD | `/ddns` | DDNS configurations |
