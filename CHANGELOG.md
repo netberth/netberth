@@ -10,6 +10,9 @@ All notable changes to NetBerth are documented here. Versioning follows
 - Container images published to GitHub Container Registry
   (`ghcr.io/netberth/netberth`), multi-arch linux/amd64 + linux/arm64 — no
   Docker Hub secrets required.
+- Container images are **public** on GHCR: anonymous
+  `docker pull ghcr.io/netberth/netberth:latest` verified end-to-end
+  (container start + login + authenticated API).
 - README/Quick Start refreshed for v1.3: screenshots, Webhook & trusted-proxy
   documentation, one-command container run.
 

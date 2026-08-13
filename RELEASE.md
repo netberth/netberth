@@ -22,6 +22,8 @@ Previous release: **v1.1.0** — TLS panel, multi-user management, audit dashboa
 Multi-arch images (linux/amd64, linux/arm64) are published to **GitHub Container
 Registry** automatically by CI — no Docker Hub secrets required:
 
+The package is public: anyone can pull without authentication.
+
 ```bash
 docker pull ghcr.io/netberth/netberth:latest
 docker pull ghcr.io/netberth/netberth:v1.3.0

@@ -72,7 +72,7 @@
 - [x] 可信代理白名单（2026-08-12）：`NB_TRUSTED_PROXIES` / `trusted_proxies`（IP 或 CIDR）；仅当直连 peer 受信任时才解析 XFF/X-Real-IP/True-Client-IP，默认全部忽略（防伪造）；`rate_limit_rate/burst` 配置非法（<1）启动即报错
 - [x] M2 Webhook 前端设置页（admin UI，2026-08-12）
 - [x] **v1.3.0 已发布**（2026-08-12）：release-gate 8/8 全绿、CI main/tag 双绿、资产校验一致；发布协议升级（一键门禁/原地镜像/SemVer/不可变 tag/draft 卫生）
-- [x] GHCR 容器镜像发布（2026-08-13）：`ghcr.io/netberth/netberth`（linux/amd64 + arm64，免 Docker Hub secrets；Docker Hub 保持手动）
+- [x] GHCR 容器镜像发布（2026-08-13）：`ghcr.io/netberth/netberth`（linux/amd64 + arm64，免 Docker Hub secrets；Docker Hub 保持手动）；包已公开，匿名 `docker pull` 验证通过
 - [ ] P2P UDP hole punching with delta prediction
 - [ ] Admin panel i18n (中文/English)
 - [ ] Backup encryption (age/AES-GCM)
