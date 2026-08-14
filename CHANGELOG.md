@@ -21,6 +21,8 @@ All notable changes to NetBerth are documented here. Versioning follows
 - Signed GHCR images (cosign keyless via GitHub Actions OIDC) with SLSA
   provenance attestation; `scripts/verify-image.sh` for user-side
   verification.
+- CI pinned to Go 1.26.6: fixes 6 Go standard-library vulnerabilities flagged
+  by govulncheck (net/url, crypto/tls, net/http, encoding/xml, encoding/asn1).
 
 ## [1.4.0] - 2026-08-13
 
