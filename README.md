@@ -14,6 +14,20 @@ issuance. Deployable via Docker in 30 seconds.
 ![Dashboard](docs/screenshots/dashboard.png)
 ![Webhooks](docs/screenshots/webhooks.png)
 
+## Supply Chain Verification
+
+GHCR images are signed with cosign (keyless, GitHub Actions OIDC) and carry an
+SLSA provenance attestation. Verify any release image with:
+
+```bash
+./scripts/verify-image.sh
+# or, for a specific tag:
+./scripts/verify-image.sh ghcr.io/netberth/netberth:v1.4.0
+```
+
+This checks both the signature identity (only the netberth/netberth CI
+workflow can produce it) and the provenance attestation.
+
 ## Quick Start
 
 ```bash

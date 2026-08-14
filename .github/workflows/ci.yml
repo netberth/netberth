@@ -97,6 +97,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -107,6 +108,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           push: true
@@ -114,3 +116,47 @@ jobs:
           tags: |
             ghcr.io/netberth/netberth:${{ inputs.version != '' && inputs.version || (github.ref_type == 'tag' && github.ref_name || 'main') }}
             ghcr.io/netberth/netberth:latest
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Generate SLSA provenance predicate
+        run: |
+          cat > /tmp/provenance.json <<'EOF'
+          {
+            "buildType": "https://github.com/netberth/netberth/.github/workflows/ci.yml@refs/heads/main",
+            "builder": {
+              "id": "https://github.com/netberth/netberth/.github/workflows/ci.yml@${{ github.sha }}"
+            },
+            "invocation": {
+              "configSource": {
+                "uri": "https://github.com/netberth/netberth",
+                "digest": { "sha1": "${{ github.sha }}" }
+              }
+            },
+            "metadata": {
+              "buildStartedOn": "${{ github.event.head_commit.timestamp }}"
+            },
+            "materials": [
+              {
+                "uri": "git+https://github.com/netberth/netberth",
+                "digest": { "sha1": "${{ github.sha }}" }
+              }
+            ]
+          }
+          EOF
+      - name: Sign image (keyless) and attach SLSA provenance
+        run: |
+          IMAGE="ghcr.io/netberth/netberth@${{ steps.build.outputs.digest }}"
+          cosign sign --yes "$IMAGE"
+          cosign attest --yes --type slsaprovenance --predicate /tmp/provenance.json "$IMAGE"
+      - name: Verify signature and provenance
+        run: |
+          IMAGE="ghcr.io/netberth/netberth@${{ steps.build.outputs.digest }}"
+          cosign verify \
+            --certificate-identity-regexp '^https://github\.com/netberth/netberth/\.github/workflows/ci\.yml@refs/(heads/(main|v[0-9.]+)|tags/v[0-9.]+)$' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            "$IMAGE"
+          cosign verify-attestation \
+            --type slsaprovenance \
+            --certificate-identity-regexp '^https://github\.com/netberth/netberth/\.github/workflows/ci\.yml@refs/(heads/(main|v[0-9.]+)|tags/v[0-9.]+)$' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            "$IMAGE"

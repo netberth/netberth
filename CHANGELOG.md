@@ -16,6 +16,12 @@ All notable changes to NetBerth are documented here. Versioning follows
 - README/Quick Start refreshed for v1.3: screenshots, Webhook & trusted-proxy
   documentation, one-command container run.
 
+### Added
+
+- Signed GHCR images (cosign keyless via GitHub Actions OIDC) with SLSA
+  provenance attestation; `scripts/verify-image.sh` for user-side
+  verification.
+
 ## [1.4.0] - 2026-08-13
 
 ### Added

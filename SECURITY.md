@@ -20,6 +20,16 @@ We aim to acknowledge reports within 48 hours and release fixes within 7 days.
 
 - Authentication: Argon2id + JWT (HS256, 15m/7d rotation)
 - Authorization: RBAC (admin/operator/viewer) + ForcePasswordChange
+
+## Supply Chain
+
+- GHCR images are signed with cosign using keyless signing (GitHub Actions
+  OIDC) and carry an SLSA v1.0 provenance attestation.
+- Signature identity is pinned to the `netberth/netberth` CI workflow and the
+  `https://token.actions.githubusercontent.com` issuer.
+- Users can verify any release image with `scripts/verify-image.sh`
+  (requires cosign). Verification covers both the signature and the
+  provenance attestation.
 - Transport: rate limiting + CSRF + brute-force protection + trusted-proxy
   whitelist (`NB_TRUSTED_PROXIES`); webhook payloads signed with HMAC-SHA256
 - Data: SQLite WAL (default, _txlock=immediate) or PostgreSQL (NB_DB_DRIVER/NB_DB_DSN)
