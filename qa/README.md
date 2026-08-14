@@ -14,6 +14,7 @@
 | `sim/` | shell + python + ab | 模拟部署形态：TLS 面板+HSTS、真实反代上游、规则重启持久化、资源受限主机、doctor、多实例共存 |
 | `e2e/` | Playwright | 真实 Chromium：登录、页面导航、深链刷新、规则/用户 CRUD、Webhook 页面（20 项） |
 | `soak/` | k6 | 长时间混合负载（默认 10 分钟，`NB_QA_SOAK_SECONDS` 可调）：斜坡/平台/尖峰/排空 + 常驻 WS |
+| `datplane/` | python3 + go test | **真实数据面**（独立于控制面）：TCP 64MiB 完整性 + 吞吐、max_conns 并发上限、目标中途断开清理、UDP 5000 包并发回环、反代 WS 长连接 |
 
 ## 用法
 
@@ -21,6 +22,8 @@
 # 一键全跑（security → load → e2e → chaos → boundary → smoke → stress → sim，可选 soak）。
 # 未设置 NB_QA_PASS 时自动生成随机管理员密码，脚本内不硬编码任何密码。
 ./qa/run-all.sh
+# 数据面专项（真实转发流量；与控制面数字分开报告）
+./qa/datplane/datplane.sh
 # 多轮全跑（默认 3 轮）
 ./qa/rounds.sh
 

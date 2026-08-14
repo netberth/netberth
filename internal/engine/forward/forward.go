@@ -55,17 +55,26 @@ type udpSession struct {
 }
 
 type udpSessionMap struct {
-	mu       sync.Mutex
-	sessions map[udpSessionKey]*udpSession
-	done     chan struct{}
-	target   *net.UDPAddr // shared target address for all sessions in this rule
+	mu            sync.Mutex
+	sessions      map[udpSessionKey]*udpSession
+	done          chan struct{}
+	target        *net.UDPAddr // shared target address for all sessions in this rule
+	ttl           time.Duration
+	cleanInterval time.Duration
+	closeOnce     sync.Once
 }
 
 func newUDPSessionMap(target *net.UDPAddr) *udpSessionMap {
+	return newUDPSessionMapWithOptions(target, udpSessionTTL, udpCleanInterval)
+}
+
+func newUDPSessionMapWithOptions(target *net.UDPAddr, ttl, cleanInterval time.Duration) *udpSessionMap {
 	m := &udpSessionMap{
-		sessions: make(map[udpSessionKey]*udpSession),
-		done:     make(chan struct{}),
-		target:   target,
+		sessions:      make(map[udpSessionKey]*udpSession),
+		done:          make(chan struct{}),
+		target:        target,
+		ttl:           ttl,
+		cleanInterval: cleanInterval,
 	}
 	go m.cleaner()
 	return m
@@ -77,7 +86,7 @@ func newUDPSessionMap(target *net.UDPAddr) *udpSessionMap {
 func (m *udpSessionMap) getOrCreate(key udpSessionKey, clientConn net.PacketConn, clientAddr net.Addr) (*net.UDPConn, error) {
 	m.mu.Lock()
 	if sess, ok := m.sessions[key]; ok {
-		sess.lastUsed.Store(time.Now().Unix())
+		sess.lastUsed.Store(time.Now().UnixNano())
 		m.mu.Unlock()
 		return sess.conn, nil
 	}
@@ -93,7 +102,7 @@ func (m *udpSessionMap) getOrCreate(key udpSessionKey, clientConn net.PacketConn
 		clientConn: clientConn,
 		clientAddr: clientAddr,
 	}
-	sess.lastUsed.Store(time.Now().Unix())
+	sess.lastUsed.Store(time.Now().UnixNano())
 	m.sessions[key] = sess
 	m.mu.Unlock()
 
@@ -114,7 +123,7 @@ func (m *udpSessionMap) sessionReader(key udpSessionKey, sess *udpSession) {
 		default:
 		}
 
-		sess.conn.SetReadDeadline(time.Now().Add(udpSessionTTL))
+		sess.conn.SetReadDeadline(time.Now().Add(m.ttl))
 		n, _, err := sess.conn.ReadFrom(buf)
 		if err != nil {
 			// Connection error or timeout — session is dead
@@ -133,27 +142,30 @@ func (m *udpSessionMap) sessionReader(key udpSessionKey, sess *udpSession) {
 }
 
 func (m *udpSessionMap) close() {
-	close(m.done)
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for k, s := range m.sessions {
-		s.conn.Close()
-		delete(m.sessions, k)
-	}
+	// Multiple UDP listeners (udp + udp6) share one session map and each
+	// calls close() on shutdown; make it idempotent.
+	m.closeOnce.Do(func() {
+		close(m.done)
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		for k, s := range m.sessions {
+			s.conn.Close()
+			delete(m.sessions, k)
+		}
+	})
 }
 
 func (m *udpSessionMap) cleaner() {
-	ticker := time.NewTicker(udpCleanInterval)
+	ticker := time.NewTicker(m.cleanInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-m.done:
 			return
 		case <-ticker.C:
-			now := time.Now().Unix()
 			m.mu.Lock()
 			for k, s := range m.sessions {
-				if now-s.lastUsed.Load() > int64(udpSessionTTL.Seconds()) {
+				if time.Since(time.Unix(0, s.lastUsed.Load())) > m.ttl {
 					s.conn.Close()
 					delete(m.sessions, k)
 				}
@@ -265,6 +277,16 @@ func (e *Engine) startRule(rule model.ForwardRule) {
 	for _, network := range e.networks(rule.Protocol) {
 		go e.listen(ctx, inst, network, sessionMap)
 	}
+	if sessionMap != nil {
+		// Close the shared UDP session map exactly once, when the rule is
+		// stopped. Per-listener defers are wrong: if one listener fails (for
+		// example udp6 on an IPv4-only address) it would kill the map out
+		// from under the other listener.
+		go func() {
+			<-ctx.Done()
+			sessionMap.close()
+		}()
+	}
 }
 
 func (e *Engine) networks(protocol string) []string {
@@ -288,7 +310,6 @@ func (e *Engine) listen(ctx context.Context, inst *ruleInstance, network string,
 
 	isUDP := network == "udp" || network == "udp6"
 	if isUDP && sessionMap != nil {
-		defer sessionMap.close()
 		packetConn, err := lc.ListenPacket(ctx, network, addr)
 		if err != nil {
 			logger.Log.Error().Err(err).Str("id", inst.rule.ID).Str("network", network).Msg("forward listen failed")
