@@ -10,8 +10,9 @@ We aim to acknowledge reports within 48 hours and release fixes within 7 days.
 
 | Version | Status |
 |---------|--------|
-| 1.4.0 | Active |
-| 1.3.1 | Previous |
+| 1.4.1 | Active |
+| 1.4.0 | Previous |
+| 1.3.1 | EOL |
 | 1.3.0 | EOL |
 | 1.2.0 | EOL |
 | 1.1.0 | EOL |

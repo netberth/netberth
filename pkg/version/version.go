@@ -6,4 +6,4 @@
 // Bump Version here for every release.
 package version
 
-const Version = "1.4.0"
+const Version = "1.4.1"

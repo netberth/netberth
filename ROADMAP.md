@@ -97,6 +97,13 @@
   provenance 证明（latest/后续 tag 自动执行，v1.4.0 为签名上线前版本）；
   `scripts/verify-image.sh` 本地校验实测通过
 
+## v1.4.1 ✅ (released 2026-08-14)
+
+- [x] UDP 转发可靠性修复：IPv6 绑定失败不再导致 UDP 转发整体失效；停止/重载
+  UDP 规则不再 panic（sessionMap 按规则生命周期精确关闭一次）
+- [x] 数据面测试纳入发布门禁（qa/datplane：真实 TCP/UDP/WS 流量，必过项）
+- [x] `internal/engine/forward` 覆盖率 46.4% → 84.7%
+
 ## v1.5 Planned（待用户反馈后再排）
 
 - [ ] P2P UDP hole punching with delta prediction

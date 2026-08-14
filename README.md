@@ -6,7 +6,13 @@ Self-hosted NAT traversal & networking toolbox for NAS and homelab. Port forward
 
 Announcements and community Q&A: [Discussions](https://github.com/netberth/netberth/discussions)
 
-**v1.4.0** adds a bilingual admin panel (English/中文), passphrase-encrypted
+**v1.4.1** fixes UDP forwarding reliability: in environments where the IPv6
+listener fails to bind, UDP forwarding could stop working entirely, and
+stopping or reloading a UDP rule could panic the process. It also adds real
+data-plane tests (TCP/UDP traffic through the forward engine, WebSocket through
+the reverse proxy).
+
+**v1.4.0** added a bilingual admin panel (English/中文), passphrase-encrypted
 database backups (`.nbbk`, AES-256-GCM + Argon2id), and tightened release
 guards; **v1.3.1** added RFC 5389 STUN compliance fixes and hardened ACME
 issuance. Deployable via Docker in 30 seconds.

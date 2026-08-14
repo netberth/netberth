@@ -2,7 +2,18 @@
 
 ## Current Release
 
-**v1.4.0** (2026-08-13) — Bilingual UI & encrypted backups
+**v1.4.1** (2026-08-14) — UDP forwarding reliability
+
+- Fixed: UDP forwarding could stop working entirely in environments where the
+  IPv6 listener fails to bind (the failing listener closed the shared session
+  map).
+- Fixed: stopping or reloading a UDP rule could panic the process
+  ("close of closed channel"); the shared UDP session map is now closed
+  exactly once, tied to rule lifetime.
+- Added mandatory data-plane devil tests: real TCP/UDP traffic through the
+  forward engine and WebSocket through the reverse proxy.
+
+Previous release: **v1.4.0** (2026-08-13) — Bilingual UI & encrypted backups
 
 - Bilingual admin panel (English/中文), zero-dependency i18n, header toggle
 - Encrypted backup/restore: `.nbbk` (AES-256-GCM + Argon2id), plaintext `.db`
@@ -47,6 +58,7 @@ pipeline.
 
 ```bash
 docker pull ghcr.io/netberth/netberth:latest
+docker pull ghcr.io/netberth/netberth:v1.4.1
 docker pull ghcr.io/netberth/netberth:v1.4.0
 docker pull ghcr.io/netberth/netberth:v1.3.1
 docker pull ghcr.io/netberth/netberth:v1.3.0

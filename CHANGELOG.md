@@ -28,6 +28,28 @@ All notable changes to NetBerth are documented here. Versioning follows
   `DOCKERHUB_REPO` variable; setup documented in RELEASE.md.
 - README: Discussions link for announcements and community Q&A.
 
+## [1.4.1] - 2026-08-14
+
+### Fixed
+
+- UDP forwarding could stop working completely in environments where the
+  IPv6 (udp6) listener failed to bind: the failing listener closed the shared
+  UDP session map, killing the IPv4 path as well.
+- Stopping or reloading a UDP (or both-protocol) forward rule could panic the
+  process with "close of closed channel": both the udp and udp6 listeners
+  deferred a close of the same session map. The map is now closed exactly
+  once, tied to the rule's lifetime.
+- UDP session aging now uses nanosecond timestamps. The default TTL is
+  unchanged (30s); aging is now exact instead of up to one second late.
+
+### Tests
+
+- New data-plane devil tests (mandatory in release-gate): TCP 64 MiB
+  integrity/throughput through the forward engine, max_conns enforcement,
+  target mid-connection disconnect cleanup, UDP concurrent forwarding and
+  session aging, and WebSocket long-lived stability through the reverse
+  proxy. `internal/engine/forward` coverage: 46.4% → 84.7%.
+
 ## [1.4.0] - 2026-08-13
 
 ### Added

@@ -29,7 +29,7 @@ echo "=== NetBerth release gate v${version} ==="
 echo "private=$ROOT public=$PUBLIC"
 
 echo
-echo "--- [1/6] private tree + version consistency ---"
+echo "--- [1/7] private tree + version consistency ---"
 DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
 check "private_tree_clean" 0 "$DIRTY" "no uncommitted changes"
 check "version_consistency" "$version" "$webver" "pkg/version == web/package.json"
@@ -39,7 +39,7 @@ fi
 
 if [ "${SKIP_TESTS:-0}" != "1" ]; then
   echo
-  echo "--- [2/6] full Go test suite ---"
+  echo "--- [2/7] full Go test suite ---"
   if GOCACHE="$GOCACHE_TMP" go test -count=1 ./... >/tmp/nb-gate-go-test.log 2>&1; then
     echo "  [PASS] go_test_all (see /tmp/nb-gate-go-test.log)"
     PASS_N=$((PASS_N+1))
@@ -49,11 +49,26 @@ if [ "${SKIP_TESTS:-0}" != "1" ]; then
     tail -20 /tmp/nb-gate-go-test.log
   fi
 else
-  echo "--- [2/6] go tests skipped (SKIP_TESTS=1) ---"
+  echo "--- [2/7] go tests skipped (SKIP_TESTS=1) ---"
 fi
 
 echo
-echo "--- [3/6] release build (frontend + zig + strings + sha256) ---"
+echo "--- [3/7] data-plane devil test (real TCP/UDP/WS traffic) ---"
+if [ "${SKIP_TESTS:-0}" != "1" ]; then
+  if ./qa/datplane/datplane.sh >/tmp/nb-gate-datplane.log 2>&1; then
+    echo "  [PASS] data_plane_devil_test (see /tmp/nb-gate-datplane.log)"
+    PASS_N=$((PASS_N+1))
+  else
+    echo "  [FAIL] data_plane_devil_test (see /tmp/nb-gate-datplane.log)"
+    FAIL_N=$((FAIL_N+1))
+    tail -30 /tmp/nb-gate-datplane.log
+  fi
+else
+  echo "  [SKIP] data-plane tests skipped (SKIP_TESTS=1)"
+fi
+
+echo
+echo "--- [4/7] release build (frontend + zig + strings + sha256) ---"
 if ./scripts/release.sh >/tmp/nb-gate-release.log 2>&1; then
   echo "  [PASS] release_build (see /tmp/nb-gate-release.log)"
   PASS_N=$((PASS_N+1))
@@ -64,7 +79,7 @@ else
 fi
 
 echo
-echo "--- [4/6] mirror private -> public (in place, no rm -rf) ---"
+echo "--- [5/7] mirror private -> public (in place, no rm -rf) ---"
 if [ ! -d "$PUBLIC/.git" ]; then
   echo "  [FAIL] $PUBLIC/.git missing — refusing to sync into a non-repo"
   FAIL_N=$((FAIL_N+1))
@@ -90,7 +105,7 @@ else
 fi
 
 echo
-echo "--- [5/6] public tree audit ---"
+echo "--- [6/7] public tree audit ---"
 FORBIDDEN=$(find "$PUBLIC" -not -path '*/.git/*' \( \
   -name 'HANDOVER.md' -o -name 'AGENTS.md' -o -name 'TEAM.md' \
   -o -name 'PROJECT_HERITAGE.md' -o -name '*report*.md' \
@@ -107,7 +122,7 @@ SENS=$(cd "$PUBLIC" && rg -l --hidden -g '!.git' -g '!dist' -g '!node_modules' -
 check "public_sensitive_scan" "" "${SENS}" "no private markers in public tree"
 
 echo
-echo "--- [6/6] independent build + test in public tree ---"
+echo "--- [7/7] independent build + test in public tree ---"
 if [ "${SKIP_TESTS:-0}" != "1" ]; then
   if (cd "$PUBLIC" && GOCACHE=/private/tmp/nb-gocache-public go build ./... && \
       GOCACHE=/private/tmp/nb-gocache-public go test -count=1 ./...) >/tmp/nb-gate-public-test.log 2>&1; then
