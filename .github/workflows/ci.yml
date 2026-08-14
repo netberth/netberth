@@ -120,29 +120,16 @@ jobs:
         uses: sigstore/cosign-installer@v3
       - name: Generate SLSA provenance predicate
         run: |
-          cat > /tmp/provenance.json <<'EOF'
-          {
-            "buildType": "https://github.com/netberth/netberth/.github/workflows/ci.yml@refs/heads/main",
-            "builder": {
-              "id": "https://github.com/netberth/netberth/.github/workflows/ci.yml@${{ github.sha }}"
-            },
-            "invocation": {
-              "configSource": {
-                "uri": "https://github.com/netberth/netberth",
-                "digest": { "sha1": "${{ github.sha }}" }
-              }
-            },
-            "metadata": {
-              "buildStartedOn": "${{ github.run_started_at }}"
-            },
-            "materials": [
-              {
-                "uri": "git+https://github.com/netberth/netberth",
-                "digest": { "sha1": "${{ github.sha }}" }
-              }
-            ]
-          }
-          EOF
+          STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          jq -n \
+            --arg buildType "https://github.com/netberth/netberth/.github/workflows/ci.yml@refs/heads/main" \
+            --arg builder "https://github.com/netberth/netberth/.github/workflows/ci.yml@${{ github.sha }}" \
+            --arg uri "https://github.com/netberth/netberth" \
+            --arg sha "${{ github.sha }}" \
+            --arg started "$STARTED" \
+            '{buildType:$buildType, builder:{id:$builder}, invocation:{configSource:{uri:$uri,digest:{sha1:$sha}}}, metadata:{buildStartedOn:$started}, materials:[{uri:("git+"+$uri),digest:{sha1:$sha}}]}' \
+            > /tmp/provenance.json
+          cat /tmp/provenance.json
       - name: Sign image (keyless) and attach SLSA provenance
         run: |
           IMAGE="ghcr.io/netberth/netberth@${{ steps.build.outputs.digest }}"
