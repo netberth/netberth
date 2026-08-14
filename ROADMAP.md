@@ -93,8 +93,11 @@
 - [x] 备份加密（NBBK2：AES-256-GCM + Argon2id，整体完整性认证；明文兼容）
 - [x] 恢复加固（0600 临时文件、fsync、原子替换带回滚）
 - [x] 发布防误推：私有仓库 pre-push hook（黑名单 SHA + 非 noreply 身份即拒）
+- [x] cosign/SLSA 供应链签名（2026-08-14）：GHCR 镜像 keyless 签名 + SLSA
+  provenance 证明（latest/后续 tag 自动执行，v1.4.0 为签名上线前版本）；
+  `scripts/verify-image.sh` 本地校验实测通过
 
 ## v1.5 Planned（待用户反馈后再排）
 
 - [ ] P2P UDP hole punching with delta prediction
-- [ ] 其他候选：CLI 备份命令、cosign/SLSA 供应链签名、Docker Hub 自动发布
+- [ ] 其他候选：CLI 备份命令、Docker Hub 自动发布
