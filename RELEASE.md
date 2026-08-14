@@ -40,8 +40,10 @@ Multi-arch images (linux/amd64, linux/arm64) are published to **GitHub Container
 Registry** automatically by CI — no Docker Hub secrets required:
 
 The package is public: anyone can pull without authentication.
-All GHCR images are signed (cosign keyless) and carry an SLSA provenance
-attestation; verify with `./scripts/verify-image.sh`.
+All GHCR images built by the signing pipeline (2026-08-14 onward, including
+`latest`) are signed (cosign keyless) and carry an SLSA provenance
+attestation; verify with `./scripts/verify-image.sh`. v1.4.0 predates this
+pipeline.
 
 ```bash
 docker pull ghcr.io/netberth/netberth:latest

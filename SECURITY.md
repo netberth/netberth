@@ -24,7 +24,9 @@ We aim to acknowledge reports within 48 hours and release fixes within 7 days.
 ## Supply Chain
 
 - GHCR images are signed with cosign using keyless signing (GitHub Actions
-  OIDC) and carry an SLSA v1.0 provenance attestation.
+  OIDC) and carry an SLSA v1.0 provenance attestation. Signing is in effect
+  for `latest` and release tags published after 2026-08-14 (v1.4.0 predates
+  the signing pipeline).
 - Signature identity is pinned to the `netberth/netberth` CI workflow and the
   `https://token.actions.githubusercontent.com` issuer.
 - Users can verify any release image with `scripts/verify-image.sh`

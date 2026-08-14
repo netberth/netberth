@@ -133,7 +133,7 @@ jobs:
               }
             },
             "metadata": {
-              "buildStartedOn": "${{ github.event.head_commit.timestamp }}"
+              "buildStartedOn": "${{ github.run_started_at }}"
             },
             "materials": [
               {

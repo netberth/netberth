@@ -8,7 +8,7 @@
 #   brew install cosign   (or https://docs.sigstore.dev/cosign/installation/)
 set -eu
 
-IMAGE="${1:-ghcr.io/netberth/netberth:v1.4.0}"
+IMAGE="${1:-ghcr.io/netberth/netberth:latest}"
 IDENTITY='^https://github\.com/netberth/netberth/\.github/workflows/ci\.yml@refs/(heads/(main|v[0-9.]+)|tags/v[0-9.]+)$'
 ISSUER='https://token.actions.githubusercontent.com'
 
