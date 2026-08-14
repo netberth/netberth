@@ -23,6 +23,10 @@ All notable changes to NetBerth are documented here. Versioning follows
   verification.
 - CI pinned to Go 1.26.6: fixes 6 Go standard-library vulnerabilities flagged
   by govulncheck (net/url, crypto/tls, net/http, encoding/xml, encoding/asn1).
+- Docker Hub publishing: tag-triggered `publish` job (secret-gated, skipped
+  until `DOCKER_USERNAME` / `DOCKER_PASSWORD` are configured); optional
+  `DOCKERHUB_REPO` variable; setup documented in RELEASE.md.
+- README: Discussions link for announcements and community Q&A.
 
 ## [1.4.0] - 2026-08-13
 

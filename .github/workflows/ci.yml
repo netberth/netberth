@@ -53,12 +53,12 @@ jobs:
           curl -sf --retry 10 --retry-delay 2 http://localhost:8443/api/v1/system/status
           docker stop netberth-test
 
-  # publish: manual-only until DOCKER_USERNAME/DOCKER_PASSWORD secrets
-  # are configured. Trigger via Actions → Run workflow.
+  # publish: Docker Hub on tag pushes (and manual workflow_dispatch).
+  # Skips cleanly until DOCKER_USERNAME/DOCKER_PASSWORD secrets exist.
   publish:
     needs: docker
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
       - name: Check Docker Hub secrets
@@ -86,8 +86,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            netberth/netberth:${{ github.ref_name }}
-            netberth/netberth:latest
+            ${{ vars.DOCKERHUB_REPO || 'netberth/netberth' }}:${{ inputs.version != '' && inputs.version || (github.ref_type == 'tag' && github.ref_name || 'main') }}
+            ${{ vars.DOCKERHUB_REPO || 'netberth/netberth' }}:latest
 
   # GHCR needs no repository secrets: GITHUB_TOKEN has package write access.
   ghcr:

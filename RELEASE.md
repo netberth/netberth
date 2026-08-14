@@ -52,8 +52,32 @@ docker pull ghcr.io/netberth/netberth:v1.3.1
 docker pull ghcr.io/netberth/netberth:v1.3.0
 ```
 
-Docker Hub publishing stays manual-only (`workflow_dispatch`) until
-`DOCKER_USERNAME` / `DOCKER_PASSWORD` secrets are configured.
+Docker Hub publishing runs automatically on `v*` tag pushes once
+`DOCKER_USERNAME` / `DOCKER_PASSWORD` secrets are configured (see below).
+Until then the publish job logs a skip message and does not fail.
+
+## Docker Hub Publishing (human-only secret setup)
+
+The publish job pushes the same multi-arch image to Docker Hub on every tag
+push, in addition to GHCR. It is gated on two repository secrets so the badge
+never turns red before they exist.
+
+Setup (human only; never paste tokens into chat, issues, or CI logs):
+
+1. Docker Hub: create an account and a repository (default name
+   `netberth/netberth`, or your own namespace).
+2. Docker Hub → Account Settings → Security → New Access Token, with
+   read/write scope. Use the token, not the account password, for CI.
+3. GitHub → repository → Settings → Secrets and variables → Actions:
+   - New repository secret `DOCKER_USERNAME` = Docker Hub username.
+   - New repository secret `DOCKER_PASSWORD` = the Docker Hub access token.
+   - Optional repository variable `DOCKERHUB_REPO` = `username/netberth`
+     if your Docker Hub namespace differs from `netberth`.
+4. Push a new `v*` tag (or run the workflow manually with the `version`
+   input). The publish job logs in and pushes `:latest` and `:<tag>`.
+
+Verification: after the run, `docker pull <namespace>/netberth:latest` on any
+machine, and check the publish job log for "Build and push" success.
 
 ## Building a Release
 

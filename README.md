@@ -4,6 +4,8 @@
 
 Self-hosted NAT traversal & networking toolbox for NAS and homelab. Port forwarding, reverse proxy, DDNS, STUN NAT traversal, Wake-on-LAN, cron scheduling, ACME certificate management, and network storage — all in one binary.
 
+Announcements and community Q&A: [Discussions](https://github.com/netberth/netberth/discussions)
+
 **v1.4.0** adds a bilingual admin panel (English/中文), passphrase-encrypted
 database backups (`.nbbk`, AES-256-GCM + Argon2id), and tightened release
 guards; **v1.3.1** added RFC 5389 STUN compliance fixes and hardened ACME
@@ -35,6 +37,8 @@ workflow can produce it) and the provenance attestation.
 ```bash
 # Docker (recommended)
 docker pull ghcr.io/netberth/netberth:latest
+# Docker Hub (when publishing is enabled by the maintainer)
+# docker pull netberth/netberth:latest
 mkdir -p netberth-data
 docker run -d --name netberth --restart unless-stopped --network host \
   -e NB_JWT_SECRET="$(openssl rand -base64 48)" \
@@ -54,7 +58,9 @@ make build && make run
 
 **Admin panel**: `http://localhost:8443` (or `https://localhost:8443` with `NB_TLS_ENABLED=true`)  
 **Pre-flight check**: `./netberth doctor` validates config, database integrity, TLS material and port availability.  
-> Note: Docker Hub image publishing is pending (requires registry secrets); `docker compose` builds from source.  
+> Note: Docker Hub publishing runs automatically on release tags once
+> `DOCKER_USERNAME` / `DOCKER_PASSWORD` secrets are configured (setup steps in
+> RELEASE.md); until then use GHCR or build from source.
 **Default credentials**: printed to `docker compose logs` on first run. Change immediately.
 
 ## Features
